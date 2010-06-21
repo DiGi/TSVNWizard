@@ -1,1 +1,1 @@
-* Add an entry to the context menu of the editor
+* Add an entry to the context menu of the editor [DONE]
