@@ -1795,23 +1795,42 @@ initialization
   NotifierList.Sorted := True;
 
 finalization
-  if (MenuCreatorNotifier <> -1) then
-  begin
-    (BorlandIDEServices as IOTAProjectManager).RemoveMenuCreatorNotifier(MenuCreatorNotifier);
+  try
+    if (MenuCreatorNotifier <> -1) then
+    begin
+      (BorlandIDEServices as IOTAProjectManager).RemoveMenuCreatorNotifier(MenuCreatorNotifier);
+    end;
+  except
   end;
 
-  RemoveIDENotifier;
-  FinalizeNotifiers;
-
-  if (EditPopup <> nil) and (EditMenuItem <> nil) then
-  begin
-    EditPopup.Items.Remove(EditMenuItem);
+  try
+    RemoveIDENotifier;
+  except
   end;
 
-  if (EditMenuItem <> nil) then
-  begin
-    EditMenuItem.Free;
-    EditMenuItem := nil;
+  try
+    FinalizeNotifiers;
+  except
+  end;
+
+  try
+    if (EditPopup <> nil) and
+       (EditMenuItem <> nil) and
+       (EditPopup.Items.IndexOf(EditMenuItem) > -1) then
+    begin
+      EditPopup.Items.Remove(EditMenuItem);
+      EditPopup := nil;
+    end;
+  except
+  end;
+
+  try
+    if (EditMenuItem <> nil) then
+    begin
+      EditMenuItem.Free;
+      EditMenuItem := nil;
+    end;
+  except
   end;
 
 end.
