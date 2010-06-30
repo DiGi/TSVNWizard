@@ -123,14 +123,16 @@ type
     class function RegisterPopup(Module: IOTAModule): Boolean; overload;
 
     class function RegisterPopup(View: IOTAEditView): Boolean; overload;
+
+    class procedure RegisterEditorNotifier(Module: IOTAModule);
+    class procedure RemoveEditorNotifier(Module: IOTAModule);
   end;
 
   TModuleArray = array of IOTAModule;
 
   TModuleNotifier = class(TModuleNotifierObject, IOTAModuleNotifier)
   strict private
-    _FileList: TStringList;
-    _Filename: string;
+    _FileName: string;
     _Notifier: Integer;
     _Module: IOTAModule;
   protected
@@ -140,6 +142,8 @@ type
   public
     constructor Create(Filename: string; Module: IOTAModule);
     destructor Destroy; override;
+
+    property FileName: string read _FileName write _FileName;
   end;
 
   TProjectNotifier = class(TModuleNotifierObject, IOTAProjectNotifier)
@@ -188,6 +192,30 @@ type
     constructor Create(AOwner: TComponent); override;
   end;
 
+  TEditorNotifier = class(TNotifierObject, IOTAEditorNotifier, IOTANotifier)
+  strict private
+    _Editor: IOTAEditor;
+    _Notifier: Integer;
+  public
+    constructor Create(Editor: IOTAEditor);                  
+    destructor Destroy; override;
+
+    { This associated item was modified in some way. This is not called for
+      IOTAWizards }
+    procedure Modified;
+
+    { This procedure is called immediately after the item is successfully saved.
+      This is not called for IOTAWizards }
+    procedure AfterSave;
+
+    { Called when a new edit view is created(opInsert) or destroyed(opRemove) }
+    procedure ViewNotification(const View: IOTAEditView; Operation: TOperation);
+
+    { Called when a view is activated }
+    procedure ViewActivated(const View: IOTAEditView);
+
+    procedure RemoveBindings;
+  end;
 {$IFNDEF DLL_MODE}
 
 procedure Register;
@@ -212,6 +240,9 @@ var
   EditPopup: TPopupMenu;
   EditMenuItem: TMenuItem;
   ImgIdx: array[0..SVN_VERB_COUNT] of Integer;
+  EditorNotifierList: TStringList;
+  ModifiedFiles: TStringList;
+  ModuleNotifierList: TStringList;
 
 function GetBitmapName(Index: Integer): string;
 begin
@@ -301,10 +332,10 @@ begin
   end;
 end;
 
-procedure GetModuleFiles( fileList: TStrings; Module: IOTAModule);
+procedure GetModuleFiles( FileList: TStrings; Module: IOTAModule);
 var
   FileEditor: IOTAEditor;
-  i: integer;
+  I: integer;
 begin
   if (Module <> nil) then
   begin
@@ -314,7 +345,7 @@ begin
         FileEditor:= Module.GetModuleFileEditor(i);
         if FileEditor <> nil then
         begin
-          fileList.Add( FileEditor.GetFileName );
+          FileList.Add( FileEditor.GetFileName );
         end;
       except
         // hack for C++ Builder 5 OTA known issue: if the unit does not
@@ -325,7 +356,7 @@ begin
         try
             FileEditor:= Module.GetModuleFileEditor(2);
             if FileEditor <> nil then
-                fileList.Add( FileEditor.GetFileName );
+              FileList.Add( FileEditor.GetFileName );
         except
         end;
       end;
@@ -428,42 +459,12 @@ begin
 end;
 
 procedure GetModifiedItems( ItemList: TStrings );
-var
-  ModServices: IOTAModuleServices;
-  Module: IOTAModule;
-  FileEditor: IOTAEditor;
-  i, j: integer;
 begin
-  ModServices := BorlandIDEServices as IOTAModuleServices;
+  ItemList.Clear;
   
-  if ModServices <> nil then
+  if Assigned(ModifiedFiles) and (ModifiedFiles.Count > 0) then
   begin
-    for i:= 0 to ModServices.GetModuleCount-1 do
-    begin
-      Module:= ModServices.GetModule(i);
-      if Module <> nil then begin
-        for j:= 0 to Module.GetModuleFileCount-1 do
-        begin
-          try
-            FileEditor:= Module.GetModuleFileEditor(j);
-            if (FileEditor <> nil) and FileEditor.Modified then
-              ItemList.Add(Module.FileName);
-          except
-            // hack for C++ Builder 5 OTA known issue: if the unit does not
-            // have an associated form, calling GetModuleFileEditor(1) throws
-            // access violation; calling GetModuleFileEditor(2) gets the .H file
-            // (GetModuleFileCount returns 2, though)
-            if (j = 1) and (Module.GetModuleFileCount = 2) then
-            try
-              FileEditor:= Module.GetModuleFileEditor(2);
-              if (FileEditor <> nil) and FileEditor.Modified then
-                  ItemList.Add(Module.FileName);
-            except
-            end;
-          end;
-        end;
-      end;
-    end;
+    ItemList.AddStrings(ModifiedFiles);
   end;
 end;
 
@@ -692,7 +693,9 @@ end;
 procedure TTortoiseSVN.Tick(Sender: TObject);
 var
   Intf: INTAServices;
-  I: Integer;
+  I, X, Index: Integer;
+  Project: IOTAProject;
+  Notifier: TProjectNotifier;
 begin
   if (BorlandIDEServices.QueryInterface(INTAServices, Intf) = S_OK) then
   begin
@@ -704,6 +707,22 @@ begin
   for I := 0 to (BorlandIDEServices as IOTAModuleServices).ModuleCount - 1 do
   begin
     TIdeNotifier.RegisterPopup((BorlandIDEServices as IOTAModuleServices).Modules[I]);
+    TIdeNotifier.RegisterEditorNotifier((BorlandIDEServices as IOTAModuleServices).Modules[I]);
+
+    if (Supports((BorlandIDEServices as IOTAModuleServices).Modules[I], IOTAProject, Project)) then
+    begin
+      Notifier := TProjectNotifier.Create(Project.FileName);
+      Notifier.Project := Project;
+      Notifier.ModuleCount := Project.GetModuleFileCount;
+      for X := 0 to Notifier.ModuleCount - 1 do
+      begin
+        Notifier.Module[X] := Project.ModuleFileEditors[X].Module;
+      end;
+
+      Index := Project.AddNotifier(Notifier as IOTAProjectNotifier);
+      if (Index >= 0) then
+        NotifierList.AddObject(Project.FileName, Pointer(Index));
+    end;
   end;
 end;
 
@@ -1606,6 +1625,8 @@ begin
         if not Assigned(Module) then Exit;
 
         RegisterPopup(Module);
+        
+        RegisterEditorNotifier(Module);
       end;
     end;
     ofnProjectDesktopLoad:
@@ -1616,17 +1637,23 @@ begin
         Module := (BorlandIDEServices as IOTAModuleServices).Modules[I];
 
         RegisterPopup(Module);
+
+        RegisterEditorNotifier(Module);
       end;
     end;
     ofnFileClosing :
     begin
+      Module := (BorlandIDEServices as IOTAModuleServices).FindModule(FileName);
+      if (not Assigned(Module)) then Exit;
+
       if NotifierList.Find(FileName, I) then
       begin
         Index := Integer(NotifierList.Objects[I]);
         NotifierList.Delete(I);
-        Module := (BorlandIDEServices as IOTAModuleServices).FindModule(FileName);
         Module.RemoveNotifier(Index);
       end;
+
+      RemoveEditorNotifier(Module);
     end;
   end;
 end;
@@ -1639,7 +1666,7 @@ var
   SourceEditor: IOTASourceEditor;
 begin
   Result := False;
-  
+
   for I := 0 to Module.GetModuleFileCount - 1 do
   begin
     Editor := nil;
@@ -1654,6 +1681,29 @@ begin
       begin
         Result := RegisterPopup(SourceEditor.EditViews[K]);
         if (Result) then Exit;
+      end;
+    end;
+  end;
+end;
+
+class procedure TIdeNotifier.RegisterEditorNotifier(Module: IOTAModule);
+var
+  I: Integer;
+  Editor: IOTAEditor;
+begin
+  for I := 0 to Module.GetModuleFileCount - 1 do
+  begin
+    Editor := nil;
+    try
+      Editor := Module.GetModuleFileEditor(I);
+    except
+    end;
+
+    if (Assigned(Editor)) then
+    begin
+      if (EditorNotifierList.IndexOf(Editor.FileName) = -1) then
+      begin
+        EditorNotifierList.AddObject(Editor.FileName, TEditorNotifier.Create(Editor));
       end;
     end;
   end;
@@ -1695,6 +1745,35 @@ begin
   Result := True;
 end;
 
+class procedure TIdeNotifier.RemoveEditorNotifier(Module: IOTAModule);
+var
+  Editor: IOTAEditor;
+  I, Idx: Integer;
+  EditorNotifier: TEditorNotifier;
+begin
+  for I := 0 to Module.GetModuleFileCount - 1 do
+  begin
+    Editor := nil;
+    try
+      Editor := Module.GetModuleFileEditor(I);
+    except
+    end;
+
+    if (Assigned(Editor)) then
+    begin
+      try
+        if (EditorNotifierList.Find(Editor.FileName, Idx)) then
+        begin
+          EditorNotifier := TEditorNotifier(EditorNotifierList.Objects[Idx]);
+          EditorNotifierList.Delete(Idx);
+          EditorNotifier.RemoveBindings;
+        end;
+      except
+      end;
+    end;
+  end;
+end;
+
 { TProjectNotifier }
 
 constructor TProjectNotifier.Create(const FileName: string);
@@ -1713,14 +1792,32 @@ procedure TProjectNotifier.ModuleRenamed(const AOldFileName,
   ANewFileName: string);
 var
   I, Index : Integer;
+  EditorNotifier: TEditorNotifier;
+  ModuleNotifier: TModuleNotifier; 
 begin
   if NotifierList.Find(AOldFileName, I) then
   begin
     Index := Integer(NotifierList.Objects[I]);
     NotifierList.Delete(I);
     NotifierList.AddObject(ANewFileName, Pointer(Index));
-    FFileName := ANewFileName;
   end;
+
+  if ModuleNotifierList.Find(AOldFileName, I) then
+  begin
+    ModuleNotifier := TModuleNotifier(ModuleNotifierList.Objects[I]);
+    ModuleNotifier.FileName := ANewFileName;
+    ModuleNotifierList.Delete(I);
+    ModuleNotifierList.AddObject(ANewFileName, ModuleNotifier);
+  end;
+
+  if EditorNotifierList.Find(AOldFileName, I) then
+  begin
+    EditorNotifier := TEditorNotifier(EditorNotifierList.Objects[I]);
+    EditorNotifierList.Delete(I);
+    EditorNotifierList.AddObject(ANewFileName, EditorNotifier);
+  end;
+
+  FFileName := ANewFileName;
 end;
 
 procedure TProjectNotifier.ModuleRenamed(const NewName: string);
@@ -1767,6 +1864,28 @@ begin
   end;
 end; 
 
+procedure FinalizeEditorNotifiers;
+var
+  I : Integer;
+  EditorNotifier: TEditorNotifier;
+begin
+  if not Assigned(EditorNotifierList) then Exit;
+
+  try
+    for I := 0 to EditorNotifierList.Count -1 do
+    begin
+      EditorNotifier := TEditorNotifier(EditorNotifierList.Objects[I]);
+      EditorNotifier.RemoveBindings;
+      try
+        EditorNotifier.Free;
+      except
+      end;
+    end;
+  finally
+    FreeAndNil(EditorNotifierList);
+  end;
+end; 
+
 procedure TProjectNotifier.SetModule(Index: Integer; const Value: IOTAModule);
 begin
   FModules[Index] := Value;
@@ -1791,7 +1910,7 @@ begin
   if (ModInfo <> nil) then
   begin
     Module := ModInfo.OpenModule;
-    TModuleNotifier.Create(AFileName, Module);
+    ModuleNotifierList.AddObject(AFileName, TModuleNotifier.Create(AFileName, Module));
   end;
 end;
 
@@ -1813,6 +1932,7 @@ procedure TModuleNotifier.AfterSave;
 var
   I: Integer;
   Cmd: string;
+  FileList: TStringList;
 begin
   if (MessageDlg(Format(GetString(28), [ExtractFileName(_Filename)]), mtConfirmation, [mbYes,mbNo], 0) <> mrYes) then
   begin
@@ -1820,27 +1940,39 @@ begin
       Always remove notifier after asking for adding the file and don't ask
       every time a file is saved.
     }
-    _Module.RemoveNotifier(_Notifier);
+    if (_Notifier = -1) then
+    begin
+      _Module.RemoveNotifier(_Notifier);
+      _Notifier := -1;
+    end;
 
     Exit;
   end;
 
-  GetModuleFiles(_FileList, _Module);
-
   Cmd := '';
-  for I := 0 to _FileList.Count - 1 do
-  begin
-    Cmd := Cmd + _FileList[I];
-    if (I < _FileList.Count - 1) then
-      Cmd := Cmd + '*';
+  FileList := TStringList.Create;
+  try
+    GetModuleFiles(FileList, _Module);
+
+    for I := 0 to FileList.Count - 1 do
+    begin
+      Cmd := Cmd + FileList[I];
+      if (I < FileList.Count - 1) then
+        Cmd := Cmd + '*';
+    end;
+  finally
+    FileList.Free;
   end;
 
   Cmd := '/command:add /notempfile /path:' + AnsiQuotedStr(Cmd, '"');
 
   TTortoiseSVN.TSVNExec(Cmd);
 
-  _Module.RemoveNotifier(_Notifier);
-  _Notifier := -1;
+  if (_Notifier = -1) then
+  begin
+    _Module.RemoveNotifier(_Notifier);
+    _Notifier := -1;
+  end;
 end;
 
 constructor TModuleNotifier.Create(Filename: string; Module: IOTAModule);
@@ -1850,16 +1982,10 @@ begin
   _Filename := Filename;
   _Module := Module;
   _Notifier := _Module.AddNotifier(Self);
-  _FileList := TStringList.Create;
 end;
 
 destructor TModuleNotifier.Destroy;
 begin
-  try
-    _FileList.Free;
-  except
-  end;
-
   try
     if (_Notifier <> -1) then
     begin
@@ -1915,9 +2041,73 @@ begin
   TortoiseSVN.ProjectMenuTimer := nil;
 end;
 
+{ TEditorNotifier }
+
+procedure TEditorNotifier.AfterSave;
+var
+  Idx: Integer;
+begin
+  if (ModifiedFiles.Find(_Editor.FileName, Idx)) then
+    ModifiedFiles.Delete(Idx);
+end;
+
+constructor TEditorNotifier.Create(Editor: IOTAEditor);
+begin
+  inherited Create;
+
+  _Editor := Editor;
+  _Notifier := _Editor.AddNotifier(Self as IOTAEditorNotifier);
+end;
+
+destructor TEditorNotifier.Destroy;
+begin
+  if (_Notifier <> -1) then
+  begin
+    _Editor.RemoveNotifier(_Notifier);
+    _Notifier := -1;
+  end;
+
+  inherited;
+end;
+
+procedure TEditorNotifier.Modified;
+begin
+  if (ModifiedFiles.IndexOf(_Editor.FileName) = -1) then
+    ModifiedFiles.Add(_Editor.FileName);
+end;
+
+procedure TEditorNotifier.RemoveBindings;
+begin
+  if (_Notifier <> -1) then
+  begin
+    try
+      _Editor.RemoveNotifier(_Notifier);
+    except
+    end;
+    _Notifier := -1;
+  end;
+end;
+
+procedure TEditorNotifier.ViewActivated(const View: IOTAEditView);
+begin
+  // not used
+end;
+
+procedure TEditorNotifier.ViewNotification(const View: IOTAEditView;
+  Operation: TOperation);
+begin
+  // not used
+end;
+
 initialization
   NotifierList := TStringList.Create;
   NotifierList.Sorted := True;
+  EditorNotifierList := TStringList.Create;
+  EditorNotifierList.Sorted := True;
+  ModifiedFiles := TStringList.Create;
+  ModifiedFiles.Sorted := True;
+  ModuleNotifierList := TStringList.Create;
+  ModuleNotifierList.Sorted := True;
 
 finalization
   try
@@ -1935,6 +2125,21 @@ finalization
 
   try
     FinalizeNotifiers;
+  except
+  end;
+
+  try
+    FinalizeEditorNotifiers;
+  except
+  end;
+
+  try
+    FreeAndNil(ModifiedFiles);
+  except
+  end;
+
+  try
+    FreeAndNil(ModuleNotifierList);
   except
   end;
 
