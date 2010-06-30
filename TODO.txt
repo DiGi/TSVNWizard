@@ -1,3 +1,1 @@
-* Linked directories should be checked too if the project is updated/committed
-* Right click on a linked directory should add a popup entry
 * Define additional folders which should be checked - a project wide setting

@@ -49,6 +49,7 @@ type
     CmdFiles: string;
     Timer: TTimer;
     TSvnMenu: TMenuItem;
+    IsDirectory: Boolean;
 
     function GetVerb(Index: Integer): string;
     function GetVerbState(Index: Integer): Word;
@@ -72,6 +73,14 @@ type
     procedure TSVNMenuClick( Sender: TObject );
     procedure CreateMenu; overload;
     procedure CreateMenu(Parent: TMenuItem; const Ident: string = ''); overload;
+
+    ///  <summary>
+    ///  Returns the path for the TortoiseSVN command depending on the files in
+    ///  a project. This includes entries such as ..\..\MyUnit.pas.
+    ///  </summary>
+    function GetPathForProject(Project: IOTAProject): string;
+
+    procedure GetFiles(Files: TStringList);
 
     class procedure TSVNExec( Params: string );
     class procedure TSVNMergeExec( Params: string );
@@ -351,7 +360,7 @@ begin
   end;
 end;
 
-procedure TTortoiseSVN.GetCurrentModuleFileList( fileList: TStrings );
+procedure TTortoiseSVN.GetCurrentModuleFileList( FileList: TStrings );
 var
   ModServices: IOTAModuleServices;
   Module: IOTAModule;
@@ -359,16 +368,16 @@ var
   ModInfo: IOTAModuleInfo;
   FileName: string;
 begin
-  fileList.Clear;
+  FileList.Clear;
 
   if (IsPopup) and (not IsEditor) then
   begin
     Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
 
-    ModInfo := project.FindModuleInfo(FileName);
+    ModInfo := Project.FindModuleInfo(FileName);
     if (ModInfo <> nil) then
     begin
-      GetModuleFiles(fileList, ModInfo.OpenModule);
+      GetModuleFiles(FileList, ModInfo.OpenModule);
     end;
   end else
   begin
@@ -376,12 +385,49 @@ begin
     if (ModServices <> nil) then
     begin
       Module := ModServices.CurrentModule;
-      GetModuleFiles(fileList, Module);
+      GetModuleFiles(FileList, Module);
     end;
   end;
 end;
 
-procedure GetModifiedItems( itemList: TStrings );
+procedure TTortoiseSVN.GetFiles(Files: TStringList);
+var
+  Ident: string;
+  Project: IOTAProject;
+  ItemList: TStringList;
+  ModInfo: IOTAModuleInfo;
+begin
+  if (IsPopup) and (not IsEditor) then
+  begin
+    {
+      The call is from the Popup and a file is selected
+    }
+    Ident := '';
+    Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(Ident);
+
+    ItemList := TStringList.Create;
+    try
+      ModInfo := Project.FindModuleInfo(Ident);
+      if (ModInfo <> nil) then
+      begin
+        GetModuleFiles(ItemList, ModInfo.OpenModule);
+
+        Files.AddStrings(ItemList);
+      end else
+      begin
+        if (DirectoryExists(Ident)) then
+          Files.Add(Ident);
+      end;
+    finally
+      ItemList.Free;
+    end;
+  end else
+  begin
+    GetCurrentModuleFileList(Files);
+  end;
+end;
+
+procedure GetModifiedItems( ItemList: TStrings );
 var
   ModServices: IOTAModuleServices;
   Module: IOTAModule;
@@ -401,7 +447,7 @@ begin
           try
             FileEditor:= Module.GetModuleFileEditor(j);
             if (FileEditor <> nil) and FileEditor.Modified then
-              itemList.Add(Module.FileName);
+              ItemList.Add(Module.FileName);
           except
             // hack for C++ Builder 5 OTA known issue: if the unit does not
             // have an associated form, calling GetModuleFileEditor(1) throws
@@ -411,7 +457,7 @@ begin
             try
               FileEditor:= Module.GetModuleFileEditor(2);
               if (FileEditor <> nil) and FileEditor.Modified then
-                  itemList.Add(Module.FileName);
+                  ItemList.Add(Module.FileName);
             except
             end;
           end;
@@ -440,15 +486,22 @@ begin
   begin
     CreateMenu(Result, sProjectContainer);
     Result.Tag := 2;
+  end
+  else if (SameText(Ident, sDirectoryContainer)) then
+  begin
+    CreateMenu(Result, sDirectoryContainer);
+    Result.Tag := 8;
   end;
 
-  ProjectMenuTimer := TProjectMenuTimer.Create(Result);
+  // Disable for now - didn't work properly
+  // ProjectMenuTimer := TProjectMenuTimer.Create(Result);
 end;
 
 function TTortoiseSVN.CanHandle(const Ident: string): Boolean;
 begin
   Result := SameText(Ident, sFileContainer) or
-            SameText(Ident, sProjectContainer);
+            SameText(Ident, sProjectContainer) or
+            SameText(Ident, sDirectoryContainer);
 end;
 
 procedure TTortoiseSVN.ConflictClick(Sender: TObject);
@@ -456,18 +509,21 @@ var
   Files: TStringList;
   Item: TComponent;
 begin
-  Item := (Sender as TComponent);
-  
-  Files := TStringList.Create;
-  try
-    GetCurrentModuleFileList(files);
+  if (Sender is TComponent) then
+  begin
+    Item := TComponent(Sender);
 
-    if (Files.Count > 1) then
-      TSVNExec( '/command:conflicteditor /notempfile /path:' + AnsiQuotedStr( Files[Item.Tag], '"' ) )
-    else if files.Count = 1 then
-      TSVNExec( '/command:conflicteditor /notempfile /path:' + AnsiQuotedStr( Files[0], '"' ) );
-  finally
-    Files.free;
+    Files := TStringList.Create;
+    try
+      GetFiles(Files);
+
+      if (Files.Count > 1) then
+        TSVNExec( '/command:conflicteditor /notempfile /path:' + AnsiQuotedStr( Files[Item.Tag], '"' ) )
+      else if (Files.Count = 1) then
+        TSVNExec( '/command:conflicteditor /notempfile /path:' + AnsiQuotedStr( Files[0], '"' ) );
+    finally
+      Files.Free;
+    end;
   end;
 end;
 
@@ -476,18 +532,21 @@ var
   Files: TStringList;
   Item: TComponent;
 begin
-  Item := (Sender as TComponent);
+  if (Sender is TComponent) then
+  begin
+    Item := TComponent(Sender);
 
-  Files:= TStringList.Create;
-  try
-    GetCurrentModuleFileList(Files);
+    Files := TStringList.Create;
+    try
+      GetFiles(Files);
 
-    if (Files.Count > 1) then
-      TSVNExec( '/command:resolve /notempfile /path:' + AnsiQuotedStr( Files[Item.Tag], '"' ) )
-    else if (Files.Count = 1) then
-      TSVNExec( '/command:resolve /notempfile /path:' + AnsiQuotedStr( Files[0], '"' ) );
-  finally
-    Files.free;
+      if (Files.Count > 1) then
+        TSVNExec( '/command:resolve /notempfile /path:' + AnsiQuotedStr( Files[Item.Tag], '"' ) )
+      else if (Files.Count = 1) then
+        TSVNExec( '/command:resolve /notempfile /path:' + AnsiQuotedStr( Files[0], '"' ) );
+    finally
+      Files.Free;
+    end;
   end;
 end;
 
@@ -563,11 +622,18 @@ begin
     if (Ident <> '') then
     begin
       // Ignore the project specific entries for the file container
-      if (SameText(Ident, sFileContainer)) and (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH]) then
+      if (SameText(Ident, sFileContainer)) and
+         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH]) then
+        Continue;
+
+      // Ignore the project and some file specific entries for the directory container
+      if (SameText(Ident, sDirectoryContainer)) and
+         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
         Continue;
 
       // Ignore the file specific entries for the project container
-      if (SameText(Ident, sProjectContainer)) and (I in [SVN_LOG_FILE, SVN_DIFF, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
+      if (SameText(Ident, sProjectContainer)) and
+         (I in [SVN_LOG_FILE, SVN_DIFF, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
         Continue;
 
       // Ignore about and settings in the popup
@@ -666,6 +732,8 @@ begin
 
   IsEditor := (Parent.Tag and 4) = 4;
 
+  IsDirectory := (Parent.Tag and 4) = 4;
+
   Diff := nil; Log := nil; Conflict := nil; ConflictOk := nil;
 
   for I := 0 to Parent.Count - 1 do
@@ -712,16 +780,20 @@ begin
       The call is from the Popup and a file is selected
     }
     Ident := '';
-    project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(Ident);
+    Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(Ident);
 
     ItemList := TStringList.Create;
     try
-      ModInfo := project.FindModuleInfo(Ident);
+      ModInfo := Project.FindModuleInfo(Ident);
       if (ModInfo <> nil) then
       begin
-        GetModuleFiles(itemList, ModInfo.OpenModule);
+        GetModuleFiles(ItemList, ModInfo.OpenModule);
 
         Files.AddStrings(ItemList);
+      end else
+      begin
+        if (DirectoryExists(Ident)) then
+          Files.Add(Ident);
       end;
     finally
       ItemList.Free;
@@ -852,41 +924,48 @@ begin
   WinExec( pansichar(cmdLine), SW_SHOW );
 end;
 
-procedure TTortoiseSVN.DiffClick( sender: TObject );
+procedure TTortoiseSVN.DiffClick( Sender: TObject );
 var
-  files: TStringList;
-  item: TComponent;
+  Files: TStringList;
+  Item: TComponent;
 begin
-  item:= sender as TComponent;
-  files:= TStringList.create;
-  try
-    GetCurrentModuleFileList(files);
-    if files.Count > 1 then
-      TSVNExec( '/command:diff /notempfile /path:' + AnsiQuotedStr( files[item.Tag], '"' ) )
-    else if files.Count = 1 then
-      TSVNExec( '/command:diff /notempfile /path:' + AnsiQuotedStr( files[0], '"' ) );
-  finally
-    files.free;
+  if (Sender is TComponent) then
+  begin
+    Item := TComponent(Sender);
+
+    Files := TStringList.Create;
+    try
+      GetFiles(Files);
+
+      if (Files.Count > 1) then
+        TSVNExec( '/command:diff /notempfile /path:' + AnsiQuotedStr( Files[Item.Tag], '"' ) )
+      else if (Files.Count = 1) then
+        TSVNExec( '/command:diff /notempfile /path:' + AnsiQuotedStr( Files[0], '"' ) );
+    finally
+      Files.Free;
+    end;
   end;
 end;
 
 procedure TTortoiseSVN.LogClick(Sender : TObject);
 var
-  files : TStringList;
-  item  : TComponent;
+  Files : TStringList;
+  Item  : TComponent;
 begin
   if (Sender is TComponent) then
   begin
-    item  := TComponent(Sender);
-    files := TStringList.Create();
+    Item  := TComponent(Sender);
+
+    Files := TStringList.Create;
     try
-      GetCurrentModuleFileList(files);
-      if files.Count > 1 then
-        TSVNExec('/command:log /notempfile /path:' + AnsiQuotedStr(files[item.Tag], '"'))
-      else if (files.Count = 1) then
-        TSVNExec('/command:log /notempfile /path:' + AnsiQuotedStr(files[0], '"'));
+      GetFiles(Files);
+
+      if (Files.Count > 1) then
+        TSVNExec('/command:log /notempfile /path:' + AnsiQuotedStr(Files[Item.Tag], '"'))
+      else if (Files.Count = 1) then
+        TSVNExec('/command:log /notempfile /path:' + AnsiQuotedStr(Files[0], '"'));
     finally
-      files.Free();
+      Files.Free;
     end;
   end;
 end;
@@ -1024,15 +1103,15 @@ end;
 
 procedure TTortoiseSVN.ExecuteVerb(Index: Integer);
 var
-  project: IOTAProject;
-  itemList: TStringList;
-  modifiedItems: boolean;
-  modifiedItemsMessage: string;
-  i: integer;
-  response: Word;
+  Project: IOTAProject;
+  ItemList: TStringList;
+  ModifiedItems: boolean;
+  ModifiedItemsMessage: string;
+  I: integer;
+  Response: Word;
   FileName, Cmd: string;
 begin
-  project:= GetCurrentProject();
+  Project := GetCurrentProject();
 
   case index of
     SVN_PROJECT_EXPLORER:
@@ -1045,11 +1124,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
-          ShellExecute( 0, 'open', pchar( ExtractFilePath(project.GetFileName) ), '', '', SW_SHOWNORMAL );
+        if (Project <> nil) then
+          ShellExecute( 0, 'open', pchar( ExtractFilePath(Project.GetFileName) ), '', '', SW_SHOWNORMAL );
       end;
     SVN_LOG_PROJECT:
       if (not IsPopup) or (IsProject) then
@@ -1061,11 +1140,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
-          TSVNExec( '/command:log /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNExec( '/command:log /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
       end;
     SVN_LOG_FILE:
         // this verb is handled by its menu item
@@ -1080,11 +1159,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
-          TSVNExec( '/command:repostatus /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNExec( '/command:repostatus /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
       end else
       begin
         {
@@ -1104,11 +1183,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
-            
-        if project <> nil then
-          TSVNExec( '/command:add /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+
+        if (Project <> nil) then
+          TSVNExec( '/command:add /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) );
       end else
       begin
         {
@@ -1128,24 +1207,28 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if (project <> nil) then
+        if (Project <> nil) then
         begin
-          itemList:= TStringList.Create;
-          GetModifiedItems(itemList);
-          modifiedItems:= itemList.Count > 0;
+          ItemList := TStringList.Create;
+          try
+            GetModifiedItems(ItemList);
+            ModifiedItems := (ItemList.Count > 0);
 
-          if modifiedItems then
-          begin
-            modifiedItemsMessage := GetString(25) + #13#10#13#10;
-            for i:= 0 to itemList.Count-1 do
-              modifiedItemsMessage:= modifiedItemsMessage + '    ' + itemList[i] + #13#10;
-            modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(26);
+            if ModifiedItems then
+            begin
+              modifiedItemsMessage := GetString(25) + #13#10#13#10;
+              for i:= 0 to ItemList.Count-1 do
+                modifiedItemsMessage:= modifiedItemsMessage + '    ' + ItemList[i] + #13#10;
+              modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(26);
+            end;
+          finally
+            ItemList.Free;
           end;
-          itemList.Free;
-          if modifiedItems then
+
+          if ModifiedItems then
           begin
             response:= MessageDlg( modifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
             if response = mrYes then
@@ -1153,7 +1236,8 @@ begin
             else if response = mrCancel then
               Exit;
           end;
-          TSVNExec( '/command:update /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+
+          TSVNExec( '/command:update /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
         end;
       end else
       begin
@@ -1174,23 +1258,28 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
             
-        if (project <> nil) then
+        if (Project <> nil) then
         begin
-          itemList:= TStringList.Create;
-          GetModifiedItems(itemList);
-          modifiedItems:= itemList.Count > 0;
-          if modifiedItems then
-          begin
-            modifiedItemsMessage:= GetString(25) + #13#10#13#10;
-            for i:= 0 to itemList.Count-1 do
-              modifiedItemsMessage:= modifiedItemsMessage + '    ' + itemList[i] + #13#10;
-            modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(27);
+          ItemList := TStringList.Create;
+          try
+            GetModifiedItems(ItemList);
+            ModifiedItems := ItemList.Count > 0;
+
+            if ModifiedItems then
+            begin
+              modifiedItemsMessage := GetString(25) + #13#10#13#10;
+              for i:= 0 to ItemList.Count-1 do
+                modifiedItemsMessage:= modifiedItemsMessage + '    ' + ItemList[i] + #13#10;
+              modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(27);
+            end;
+          finally
+            ItemList.Free;
           end;
-          itemList.Free;
-          if modifiedItems then
+          
+          if ModifiedItems then
           begin
             response:= MessageDlg( modifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
             if response = mrYes then
@@ -1198,7 +1287,8 @@ begin
             else if response = mrCancel then
               Exit;
           end;
-          TSVNExec( '/command:commit /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+
+          TSVNExec( '/command:commit /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
         end;
       end else
       begin
@@ -1222,11 +1312,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
             
-        if (project <> nil) then
-          TSVNExec( '/command:revert /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNExec( '/command:revert /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
       end else
       begin
         {
@@ -1246,10 +1336,10 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
+        if (Project <> nil) then
           TSVNExec( '/command:repobrowser /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) )
         else
           TSVNExec( '/command:repobrowser' );
@@ -1272,11 +1362,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
             
-        if (project <> nil) then
-          TSVNExec( '/command:createpatch /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNExec( '/command:createpatch /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) );
       end else
       begin
         {
@@ -1296,11 +1386,11 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
-          TSVNMergeExec( '/patchpath:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNMergeExec( '/patchpath:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) );
       end;
     SVN_CLEAN:
       if (not IsPopup) or (IsProject) then
@@ -1312,18 +1402,18 @@ begin
         }
         if (IsProject) then
         begin
-          project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
         end;
 
-        if project <> nil then
-          TSVNExec( '/command:cleanup /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) )
+        if (Project <> nil) then
+          TSVNExec( '/command:cleanup /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) )
       end;
     SVN_IMPORT:
-        if (project <> nil) then
-          TSVNExec( '/command:import /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) );
+        if (Project <> nil) then
+          TSVNExec( '/command:import /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) );
     SVN_CHECKOUT:
-        if (project <> nil) then
-          TSVNExec( '/command:checkout /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(project.GetFileName), '"' ) )
+        if (Project <> nil) then
+          TSVNExec( '/command:checkout /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.GetFileName), '"' ) )
         else
           TSVNExec( '/command:checkout /notempfile' );
   end;
@@ -1368,6 +1458,41 @@ end;
 function TTortoiseSVN.GetName: string;
 begin
   result:= 'TortoiseSVN add-in';
+end;
+
+function TTortoiseSVN.GetPathForProject(Project: IOTAProject): string;
+var
+  I: Integer;
+  Path: TStringList;
+  ModInfo: IOTAModuleInfo;
+  FilePath: string;
+begin
+  Path := TStringList.Create;
+  try
+    Path.Add(ExtractFilePath(Project.FileName));
+
+    for I := 0 to Project.GetModuleCount - 1 do
+    begin
+      ModInfo := Project.GetModule(I);
+      if (ModInfo.ModuleType <> omtPackageImport) and
+         (ModInfo.ModuleType <> omtTypeLib) then
+      begin
+        FilePath := ExtractFilePath(ModInfo.FileName);
+        if (Path.IndexOf(FilePath) = -1) then
+          Path.Add(FilePath);
+      end;
+    end;
+
+    Result := '';
+    for I := 0 to Path.Count - 1 do
+    begin
+      Result := Result + Path.Strings[I];
+      if (I < Path.Count - 1) then
+        Result := Result + '*';
+    end;
+  finally
+    Path.Free;
+  end;
 end;
 
 function TTortoiseSVN.GetState: TWizardState;
