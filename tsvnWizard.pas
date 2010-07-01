@@ -82,6 +82,8 @@ type
 
     procedure GetFiles(Files: TStringList);
 
+    function CheckModified(Project: IOTAProject): Integer;
+
     class procedure TSVNExec( Params: string );
     class procedure TSVNMergeExec( Params: string );
   public
@@ -503,6 +505,37 @@ begin
   Result := SameText(Ident, sFileContainer) or
             SameText(Ident, sProjectContainer) or
             SameText(Ident, sDirectoryContainer);
+end;
+
+function TTortoiseSVN.CheckModified(Project: IOTAProject): Integer;
+var
+  ItemList: TStringList;
+  ModifiedItems: Boolean;
+  ModifiedItemsMessage: string;
+  I: Integer;
+begin
+  Result := mrNo;
+
+  ItemList := TStringList.Create;
+  try
+    GetModifiedItems(ItemList);
+    ModifiedItems := (ItemList.Count > 0);
+
+    if ModifiedItems then
+    begin
+      ModifiedItemsMessage := GetString(25) + #13#10#13#10;
+      for I := 0 to ItemList.Count-1 do
+        ModifiedItemsMessage := ModifiedItemsMessage + '    ' + ItemList[I] + #13#10;
+      ModifiedItemsMessage := ModifiedItemsMessage + #13#10 + GetString(26);
+    end;
+  finally
+    ItemList.Free;
+  end;
+
+  if ModifiedItems then
+  begin
+    Result := MessageDlg( ModifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
+  end;
 end;
 
 procedure TTortoiseSVN.ConflictClick(Sender: TObject);
@@ -1123,11 +1156,7 @@ end;
 procedure TTortoiseSVN.ExecuteVerb(Index: Integer);
 var
   Project: IOTAProject;
-  ItemList: TStringList;
-  ModifiedItems: boolean;
-  ModifiedItemsMessage: string;
-  I: integer;
-  Response: Word;
+  Response: Integer;
   FileName, Cmd: string;
 begin
   Project := GetCurrentProject();
@@ -1231,30 +1260,12 @@ begin
 
         if (Project <> nil) then
         begin
-          ItemList := TStringList.Create;
-          try
-            GetModifiedItems(ItemList);
-            ModifiedItems := (ItemList.Count > 0);
-
-            if ModifiedItems then
-            begin
-              modifiedItemsMessage := GetString(25) + #13#10#13#10;
-              for i:= 0 to ItemList.Count-1 do
-                modifiedItemsMessage:= modifiedItemsMessage + '    ' + ItemList[i] + #13#10;
-              modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(26);
-            end;
-          finally
-            ItemList.Free;
-          end;
-
-          if ModifiedItems then
-          begin
-            response:= MessageDlg( modifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
-            if response = mrYes then
-              (BorlandIDEServices as IOTAModuleServices).saveAll
-            else if response = mrCancel then
-              Exit;
-          end;
+          Response := CheckModified(Project);
+          
+          if (Response = mrYes) then
+            (BorlandIDEServices as IOTAModuleServices).SaveAll
+          else if (Response = mrCancel) then
+            Exit;
 
           TSVNExec( '/command:update /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
         end;
@@ -1282,30 +1293,12 @@ begin
             
         if (Project <> nil) then
         begin
-          ItemList := TStringList.Create;
-          try
-            GetModifiedItems(ItemList);
-            ModifiedItems := ItemList.Count > 0;
-
-            if ModifiedItems then
-            begin
-              modifiedItemsMessage := GetString(25) + #13#10#13#10;
-              for i:= 0 to ItemList.Count-1 do
-                modifiedItemsMessage:= modifiedItemsMessage + '    ' + ItemList[i] + #13#10;
-              modifiedItemsMessage:= modifiedItemsMessage + #13#10 + GetString(27);
-            end;
-          finally
-            ItemList.Free;
-          end;
+          Response := CheckModified(Project);
           
-          if ModifiedItems then
-          begin
-            response:= MessageDlg( modifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
-            if response = mrYes then
-              (BorlandIDEServices as IOTAModuleServices).saveAll
-            else if response = mrCancel then
-              Exit;
-          end;
+          if (Response = mrYes) then
+            (BorlandIDEServices as IOTAModuleServices).SaveAll
+          else if (Response = mrCancel) then
+            Exit;
 
           TSVNExec( '/command:commit /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
         end;
