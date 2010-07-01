@@ -145,6 +145,8 @@ type
     constructor Create(Filename: string; Module: IOTAModule);
     destructor Destroy; override;
 
+    procedure RemoveBindings;
+
     property FileName: string read _FileName write _FileName;
   end;
 
@@ -198,6 +200,7 @@ type
   strict private
     _Editor: IOTAEditor;
     _Notifier: Integer;
+    _Opened: Boolean;
   public
     constructor Create(Editor: IOTAEditor);                  
     destructor Destroy; override;
@@ -217,6 +220,8 @@ type
     procedure ViewActivated(const View: IOTAEditView);
 
     procedure RemoveBindings;
+
+    property Opened: Boolean read _Opened write _Opened;
   end;
 {$IFNDEF DLL_MODE}
 
@@ -1691,6 +1696,8 @@ class procedure TIdeNotifier.RegisterEditorNotifier(Module: IOTAModule);
 var
   I: Integer;
   Editor: IOTAEditor;
+  EditorNotifier: TEditorNotifier;
+  SourceEditor: IOTASourceEditor;
 begin
   for I := 0 to Module.GetModuleFileCount - 1 do
   begin
@@ -1704,7 +1711,18 @@ begin
     begin
       if (EditorNotifierList.IndexOf(Editor.FileName) = -1) then
       begin
-        EditorNotifierList.AddObject(Editor.FileName, TEditorNotifier.Create(Editor));
+        EditorNotifier := TEditorNotifier.Create(Editor);
+        if (Supports(Editor, IOTASourceEditor, SourceEditor)) then
+        begin
+          {
+            It can happen that no view is reported at this time so we need
+            to add the entry for the popup menu in the editor at a later time.
+          }
+          if (SourceEditor.EditViewCount = 0) then
+            EditorNotifier.Opened := False;
+        end;
+        
+        EditorNotifierList.AddObject(Editor.FileName, EditorNotifier);
       end;
     end;
   end;
@@ -1918,7 +1936,17 @@ end;
 procedure TProjectNotifier.ModuleRemoved(const AFileName: string);
 var
   Cmd: string;
+  Idx: Integer;
+  ModuleNotifier: TModuleNotifier;
 begin
+  // If a module is removed from the project also remove the module notifier
+  if (ModuleNotifierList.Find(AFileName, Idx)) then
+  begin
+    ModuleNotifier := TModuleNotifier(ModuleNotifierList.Objects[Idx]);
+    ModuleNotifierList.Delete(Idx);
+    ModuleNotifier.RemoveBindings;
+  end;
+
   if (MessageDlg(Format(GetString(29), [ExtractFileName(AFileName)]), mtConfirmation, [mbYes,mbNo], 0) <> mrYes) then
     Exit;
 
@@ -1941,11 +1969,7 @@ begin
       Always remove notifier after asking for adding the file and don't ask
       every time a file is saved.
     }
-    if (_Notifier = -1) then
-    begin
-      _Module.RemoveNotifier(_Notifier);
-      _Notifier := -1;
-    end;
+    RemoveBindings;
 
     Exit;
   end;
@@ -1969,11 +1993,7 @@ begin
 
   TTortoiseSVN.TSVNExec(Cmd);
 
-  if (_Notifier = -1) then
-  begin
-    _Module.RemoveNotifier(_Notifier);
-    _Notifier := -1;
-  end;
+  RemoveBindings;
 end;
 
 constructor TModuleNotifier.Create(Filename: string; Module: IOTAModule);
@@ -1987,6 +2007,13 @@ end;
 
 destructor TModuleNotifier.Destroy;
 begin
+  RemoveBindings;
+
+  inherited Destroy;
+end;
+
+procedure TModuleNotifier.RemoveBindings;
+begin
   try
     if (_Notifier <> -1) then
     begin
@@ -1995,8 +2022,6 @@ begin
     end;
   except
   end;
-
-  inherited Destroy;
 end;
 
 { TProjectMenuTimer }
@@ -2057,6 +2082,7 @@ begin
   inherited Create;
 
   _Editor := Editor;
+  _Opened := True;
   _Notifier := _Editor.AddNotifier(Self as IOTAEditorNotifier);
 end;
 
@@ -2097,7 +2123,15 @@ end;
 procedure TEditorNotifier.ViewNotification(const View: IOTAEditView;
   Operation: TOperation);
 begin
-  // not used
+  {
+    It can happen that no view is reported while registering the popup the first
+    time so we need to check the view notification and add the popup afterwards.
+  }
+  if (not _Opened) and (Operation = opInsert) then
+  begin
+    _Opened := True;
+    TIdeNotifier.RegisterPopup(View);
+  end;
 end;
 
 initialization
