@@ -1263,7 +1263,11 @@ begin
           Response := CheckModified(Project);
           
           if (Response = mrYes) then
-            (BorlandIDEServices as IOTAModuleServices).SaveAll
+          begin
+            (BorlandIDEServices as IOTAModuleServices).SaveAll;
+            // If all files are saved none are left modified (some *.dfm files were still counted as being modified)
+            ModifiedFiles.Clear;
+          end
           else if (Response = mrCancel) then
             Exit;
 
@@ -1296,7 +1300,11 @@ begin
           Response := CheckModified(Project);
           
           if (Response = mrYes) then
-            (BorlandIDEServices as IOTAModuleServices).SaveAll
+          begin
+            (BorlandIDEServices as IOTAModuleServices).SaveAll;
+            // If all files are saved none are left modified (some *.dfm files were still counted as being modified)
+            ModifiedFiles.Clear;
+          end
           else if (Response = mrCancel) then
             Exit;
 
