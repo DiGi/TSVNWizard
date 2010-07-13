@@ -1,3 +1,2 @@
 * Define additional folders which should be checked - a project wide setting
 * Include blame per line
-* If a project has subdirectories, changed files are listed multiple times because both folders are used for the path
