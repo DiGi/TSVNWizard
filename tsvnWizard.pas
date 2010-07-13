@@ -2117,9 +2117,15 @@ end;
 procedure TEditorNotifier.AfterSave;
 var
   Idx: Integer;
+  I: Integer;
 begin
-  if (ModifiedFiles.Find(_Editor.FileName, Idx)) then
-    ModifiedFiles.Delete(Idx);
+  // If a file (*.pas) is saved, the corresponding files (*.dfm) are also saved
+  // so it's safe to remove them from the list 
+  for I := 0 to _Editor.Module.ModuleFileCount - 1 do
+  begin
+    if (ModifiedFiles.Find(_Editor.Module.ModuleFileEditors[I].FileName, Idx)) then
+      ModifiedFiles.Delete(Idx);
+  end;
 end;
 
 constructor TEditorNotifier.Create(Editor: IOTAEditor);
