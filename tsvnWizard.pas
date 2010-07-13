@@ -1491,9 +1491,52 @@ var
   Path: TStringList;
   ModInfo: IOTAModuleInfo;
   FilePath: string;
+
+  ///  <summary>
+  ///  Removes all subdirectories so that only the root directories are given
+  ///  to TortoiseSVN.
+  ///  </summary>
+  function RemoveSubdirs(List: TStringList): Boolean;
+  var
+    I, X: Integer;
+    Dir1, Dir2: string;
+  begin
+    Result := False;
+    for I := 0 to List.Count - 1 do
+    begin
+      Dir1 := List.Strings[I];
+
+      // Remove also empty entries
+      if (Dir1 = '') then
+      begin
+        List.Delete(I );
+        Result := True;
+        Exit;
+      end;
+
+      for X := 0 to List.Count - 1 do
+      begin
+        if (X = I) then Continue;
+
+        Dir2 := List.Strings[X];
+
+        if (Length(Dir2) > Length(Dir1)) then
+        begin
+          if (Copy(Dir2, 1, Length(Dir1)) = Dir1) then
+          begin
+            List.Delete(X);
+            Result := True;
+            Exit;
+          end;
+        end;
+      end;
+    end;
+  end;
+  
 begin
   Path := TStringList.Create;
   try
+    Path.Sorted := True;
     Path.Add(ExtractFilePath(Project.FileName));
 
     for I := 0 to Project.GetModuleCount - 1 do
@@ -1507,6 +1550,8 @@ begin
           Path.Add(FilePath);
       end;
     end;
+
+    while (RemoveSubdirs(Path)) do;
 
     Result := '';
     for I := 0 to Path.Count - 1 do
