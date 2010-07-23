@@ -27,9 +27,10 @@ const
   SVN_CLEAN = 14;
   SVN_IMPORT = 15;
   SVN_CHECKOUT = 16;
-  SVN_SETTINGS = 17;
-  SVN_ABOUT = 18;
-  SVN_VERB_COUNT = 19;
+  SVN_BLAME = 17;
+  SVN_SETTINGS = 18;
+  SVN_ABOUT = 19;
+  SVN_VERB_COUNT = 20;
 
 var
   TSVNPath: string;
@@ -64,6 +65,8 @@ type
     procedure UpdateAction( sender: TObject );
     procedure ExecuteAction( sender: TObject );
 
+    function GetCurrentModule(): IOTAModule;
+    function GetCurrentSourceEditor(): IOTASourceEditor;
     procedure GetCurrentModuleFileList( fileList: TStrings );
 
     function FindMenu(Item: TComponent): TMenu;
@@ -291,6 +294,8 @@ begin
       Result := 'import';
     SVN_CHECKOUT:
       Result := 'checkout';
+    SVN_BLAME:
+      Result := 'blame';
   end;
 end;
 
@@ -398,6 +403,11 @@ begin
   end;
 end;
 
+function TTortoiseSVN.GetCurrentModule: IOTAModule;
+begin
+  Result := (BorlandIDEServices as IOTAModuleServices).CurrentModule;
+end;
+
 procedure TTortoiseSVN.GetCurrentModuleFileList( FileList: TStrings );
 var
   ModServices: IOTAModuleServices;
@@ -424,6 +434,26 @@ begin
     begin
       Module := ModServices.CurrentModule;
       GetModuleFiles(FileList, Module);
+    end;
+  end;
+end;
+
+function TTortoiseSVN.GetCurrentSourceEditor: IOTASourceEditor;
+var
+  CurrentModule: IOTAModule;
+  Editor: IOTAEditor; 
+  I: Integer;
+begin
+  Result := nil;
+  CurrentModule := GetCurrentModule;
+  if (Assigned(CurrentModule)) then
+  begin
+    for I := 0 to CurrentModule.ModuleFileCount - 1 do
+    begin
+      Editor := CurrentModule.ModuleFileEditors[I];
+      
+      if Supports(Editor, IOTASourceEditor, Result) then
+        Exit;
     end;
   end;
 end;
@@ -1147,6 +1177,9 @@ begin
       Result := vsEnabled;
     SVN_CHECKOUT:
       Result := vsEnabled;
+    SVN_BLAME:
+      if GetCurrentProject <> nil then
+        Result := vsEnabled;
   end;
 end;
 
@@ -1163,6 +1196,8 @@ var
   Project: IOTAProject;
   Response: Integer;
   FileName, Cmd: string;
+  SourceEditor: IOTASourceEditor;
+  Line: Integer;
 begin
   Project := GetCurrentProject();
 
@@ -1266,7 +1301,7 @@ begin
         if (Project <> nil) then
         begin
           Response := CheckModified(Project);
-          
+
           if (Response = mrYes) then
           begin
             (BorlandIDEServices as IOTAModuleServices).SaveAll;
@@ -1284,6 +1319,33 @@ begin
           The call is from the Popup and a file is selected
         }
         Cmd := '/command:update /notempfile /path:' + AnsiQuotedStr(CmdFiles, '"');
+
+        TSVNExec(Cmd);
+      end;
+    SVN_BLAME:
+      begin
+        {
+          The call is from the Popup and a file is selected
+        }
+        Cmd := '/command:blame /notempfile /startrev:1 /endrev:-1 /path:' + AnsiQuotedStr(CmdFiles, '"');
+
+        Line := -1;
+
+        SourceEditor := GetCurrentSourceEditor;
+        if (IsPopup) and (Assigned(SourceEditor)) then
+        begin
+          if (SourceEditor.EditViewCount > 0) then
+          begin
+            try
+              Line := SourceEditor.EditViews[0].Position.Row;
+            except
+              Line := -1;
+            end;
+          end;
+        end;
+
+        if (Line > -1) then
+          Cmd := Cmd + ' /line:' + IntToStr(Line);
 
         TSVNExec(Cmd);
       end;
