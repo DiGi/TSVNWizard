@@ -1197,7 +1197,7 @@ begin
         end;
 
         if (Project <> nil) then
-          TSVNExec( '/command:log /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
+          TSVNExec( '/command:log /notempfile /path:' + AnsiQuotedStr( ExtractFilePath(Project.FileName), '"' ) );
       end;
     SVN_LOG_FILE:
         // this verb is handled by its menu item
