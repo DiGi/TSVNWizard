@@ -1,2 +1,1 @@
 * Define additional folders which should be checked - a project wide setting
-* Include blame per line
