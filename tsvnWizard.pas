@@ -592,27 +592,40 @@ var
   Item: TMenuItem;
   I: Integer;
   Menu: TMenu;
+  MenuType: Integer;
 begin
   if (Parent = nil) then Exit;
 
   Menu := FindMenu(Parent);
 
+  // Little speed-up (just running "SameText" once instead of every iteration
+  if (SameText(Ident, sFileContainer)) then
+    MenuType := 1
+  else if (SameText(Ident, sDirectoryContainer)) then
+    MenuType := 2
+  else if (SameText(Ident, sProjectContainer)) then
+    MenuType := 3
+  else if (Ident <> '') then
+    MenuType := 4
+  else
+    MenuType := 0;
+
   for I := 0 to SVN_VERB_COUNT - 1 do
   begin
-    if (Ident <> '') then
+    if (MenuType <> 0) then
     begin
       // Ignore the project specific entries for the file container
-      if (SameText(Ident, sFileContainer)) and
+      if (MenuType = 1) and
          (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH]) then
         Continue;
 
       // Ignore the project and some file specific entries for the directory container
-      if (SameText(Ident, sDirectoryContainer)) and
+      if (MenuType = 2) and
          (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
         Continue;
 
       // Ignore the file specific entries for the project container
-      if (SameText(Ident, sProjectContainer)) and
+      if (MenuType = 3) and
          (I in [SVN_LOG_FILE, SVN_DIFF, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
         Continue;
 
