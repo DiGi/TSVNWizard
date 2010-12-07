@@ -42,6 +42,26 @@
       
       
       
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       <Excluded_Packages Name="$(BDS)\bin\dcloffice2k100.bpl">Microsoft Office 2000 Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
       <Excluded_Packages Name="$(BDS)\bin\dclofficexp100.bpl">Microsoft Office XP Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
     </Excluded_Packages></Delphi.Personality></BorlandProject></BorlandProject>
@@ -54,6 +74,7 @@
     <DCCReference Include="designide.dcp" />
     <DCCReference Include="rtl.dcp" />
     <DCCReference Include="tsvnWizard.pas" />
+    <DCCReference Include="UHelperFunctions.pas" />
     <DCCReference Include="vcl.dcp" />
     <DCCReference Include="vclactnband.dcp" />
     <DCCReference Include="vclx.dcp" />
