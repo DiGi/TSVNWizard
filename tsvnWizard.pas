@@ -241,7 +241,7 @@ function InitWizard(const BorlandIDEServices: IBorlandIDEServices;
 
 implementation
 
-uses TypInfo, Contnrs, UHelperFunctions;
+uses TypInfo, Contnrs, UHelperFunctions, IniFiles;
 
 var
   MenuCreatorNotifier: Integer = -1;
@@ -1473,9 +1473,11 @@ end;
 function TTortoiseSVN.GetPathForProject(Project: IOTAProject): string;
 var
   I: Integer;
-  Path: TStringList;
+  Path, IniPath: TStringList;
   ModInfo: IOTAModuleInfo;
   FilePath: string;
+  ProjPath, ProjName: string;
+  IniFile: TIniFile;
 
   ///  <summary>
   ///  Removes all subdirectories so that only the root directories are given
@@ -1517,12 +1519,52 @@ var
       end;
     end;
   end;
-  
+
 begin
   Path := TStringList.Create;
   try
     Path.Sorted := True;
     Path.Add(ExtractFilePath(Project.FileName));
+
+    {
+      Check for project-specific settings in a <ProjectName>.tsvn file.
+      If this file exists, then load all values in the [AdditionalDirs] section
+      and add the existing directories to the project path.
+
+      This way one can configure additional directories which should be updated
+      when the project is updated but are not part of the project itself like
+      configuration or graphical files.
+    }
+    try
+      ProjPath := ExtractFilePath(Project.FileName);
+      ProjName := ExtractFileName(Project.FileName);
+      ProjName := Copy(ProjName, 1, Pos(ExtractFileExt(ProjName), ProjName) - 1);
+
+      if (FileExists(ProjPath + ProjName + '.tsvn')) then
+      begin
+        // Load settings
+        IniFile := TIniFile.Create(ProjPath + ProjName + '.tsvn');
+        try
+          IniPath := TStringList.Create;
+          try
+            IniFile.ReadSectionValues('AdditionalDirs', IniPath);
+            for I := 0 to IniPath.Count - 1 do
+            begin
+              if (DirectoryExists(IniPath.ValueFromIndex[I])) then
+              begin
+                Path.Add(IniPath.ValueFromIndex[I]);
+              end;
+            end;
+          finally
+            IniPath.Free;
+          end;
+        finally
+          IniFile.Free;
+        end;
+      end;
+    except
+
+    end;
 
     for I := 0 to Project.GetModuleCount - 1 do
     begin
