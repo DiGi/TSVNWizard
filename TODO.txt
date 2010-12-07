@@ -1,1 +1,1 @@
-* Define additional folders which should be checked - a project wide setting
+* GUI for additional folders (a project wide setting)
