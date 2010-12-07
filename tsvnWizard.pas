@@ -10,6 +10,9 @@ uses
   Classes, Controls, Graphics, ImgList, ExtCtrls, ActnList, XMLIntf;
 
 const
+  VERSION = '1.4';
+
+const
   SVN_PROJECT_EXPLORER = 0;
   SVN_LOG_PROJECT = 1;
   SVN_LOG_FILE = 2;
