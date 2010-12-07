@@ -10,7 +10,7 @@ uses
   Classes, Controls, Graphics, ImgList, ExtCtrls, ActnList, XMLIntf;
 
 const
-  VERSION = '1.4';
+  VERSION = '1.4.99';
 
 const
   SVN_PROJECT_EXPLORER = 0;
