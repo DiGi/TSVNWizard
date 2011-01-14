@@ -33,7 +33,8 @@ const
   SVN_BLAME = 17;
   SVN_SETTINGS = 18;
   SVN_ABOUT = 19;
-  SVN_VERB_COUNT = 20;
+  SVN_ABOUT_PLUGIN = 20;
+  SVN_VERB_COUNT = 21;
 
 var
   TSVNPath: string;
@@ -282,7 +283,8 @@ begin
       Result:= 'repository';
     SVN_SETTINGS:
       Result:= 'settings';
-    SVN_ABOUT:
+    SVN_ABOUT,
+    SVN_ABOUT_PLUGIN:
       Result:= 'about';
     SVN_EDIT_CONFLICT:
       Result := 'edconflict';
@@ -633,7 +635,7 @@ begin
         Continue;
 
       // Ignore about and settings in the popup
-      if (I in [SVN_ABOUT, SVN_SETTINGS]) then
+      if (I in [SVN_ABOUT, SVN_SETTINGS, SVN_ABOUT_PLUGIN]) then
         Continue;
     end;
 
@@ -1088,7 +1090,8 @@ begin
       Result:= vsEnabled;
     SVN_SETTINGS:
       Result:= vsEnabled;
-    SVN_ABOUT:
+    SVN_ABOUT,
+    SVN_ABOUT_PLUGIN:
       Result:= vsEnabled;
     SVN_EDIT_CONFLICT,
     SVN_CONFLICT_OK:
@@ -1362,6 +1365,8 @@ begin
         TSVNExec( '/command:settings' );
     SVN_ABOUT:
         TSVNExec( '/command:about' );
+    SVN_ABOUT_PLUGIN:
+      ShowMessage(Format(GetString(30), [VERSION]));
     SVN_EDIT_CONFLICT,
     SVN_CONFLICT_OK:
         // these verbs are handled by their menu item
