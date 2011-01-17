@@ -33,8 +33,10 @@ const
   SVN_BLAME = 17;
   SVN_SETTINGS = 18;
   SVN_ABOUT = 19;
-  SVN_ABOUT_PLUGIN = 20;
-  SVN_VERB_COUNT = 21;
+  SVN_SEPERATOR_1 = 20;
+  SVN_ABOUT_PLUGIN = 21;
+  SVN_PLUGIN_PROJ_SETTINGS = 22;
+  SVN_VERB_COUNT = 22;
 
 var
   TSVNPath: string;
@@ -283,6 +285,8 @@ begin
       Result:= 'repository';
     SVN_SETTINGS:
       Result:= 'settings';
+    SVN_PLUGIN_PROJ_SETTINGS:
+      Result := 'projsettings';
     SVN_ABOUT,
     SVN_ABOUT_PLUGIN:
       Result:= 'about';
@@ -621,12 +625,12 @@ begin
     begin
       // Ignore the project specific entries for the file container
       if (MenuType = 1) and
-         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH]) then
+         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH, SVN_PLUGIN_PROJ_SETTINGS]) then
         Continue;
 
       // Ignore the project and some file specific entries for the directory container
       if (MenuType = 2) and
-         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT]) then
+         (I in [SVN_PROJECT_EXPLORER, SVN_LOG_PROJECT, SVN_REPOSITORY_BROWSER, SVN_IMPORT, SVN_CHECKOUT, SVN_CLEAN, SVN_USE_PATCH, SVN_CONFLICT_OK, SVN_EDIT_CONFLICT, SVN_PLUGIN_PROJ_SETTINGS]) then
         Continue;
 
       // Ignore the file specific entries for the project container
@@ -1088,7 +1092,8 @@ begin
         Result:= vsEnabled;
     SVN_REPOSITORY_BROWSER:
       Result:= vsEnabled;
-    SVN_SETTINGS:
+    SVN_SETTINGS,
+    SVN_PLUGIN_PROJ_SETTINGS:
       Result:= vsEnabled;
     SVN_ABOUT,
     SVN_ABOUT_PLUGIN:
@@ -1363,6 +1368,8 @@ begin
       end;
     SVN_SETTINGS:
         TSVNExec( '/command:settings' );
+    SVN_PLUGIN_PROJ_SETTINGS:
+      ShowMessage('Project settings');
     SVN_ABOUT:
         TSVNExec( '/command:about' );
     SVN_ABOUT_PLUGIN:
