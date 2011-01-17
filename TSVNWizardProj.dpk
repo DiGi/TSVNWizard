@@ -35,6 +35,7 @@ requires
 
 contains
   tsvnWizard in 'tsvnWizard.pas',
-  UHelperFunctions in 'UHelperFunctions.pas';
+  UHelperFunctions in 'UHelperFunctions.pas',
+  UFmProjectSettings in 'UFmProjectSettings.pas' {FmProjectSettings};
 
 end.

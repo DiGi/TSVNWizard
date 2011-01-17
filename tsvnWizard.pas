@@ -36,7 +36,7 @@ const
   SVN_SEPERATOR_1 = 20;
   SVN_ABOUT_PLUGIN = 21;
   SVN_PLUGIN_PROJ_SETTINGS = 22;
-  SVN_VERB_COUNT = 22;
+  SVN_VERB_COUNT = 23;
 
 var
   TSVNPath: string;
@@ -247,7 +247,7 @@ function InitWizard(const BorlandIDEServices: IBorlandIDEServices;
 
 implementation
 
-uses TypInfo, Contnrs, UHelperFunctions, IniFiles;
+uses TypInfo, Contnrs, UHelperFunctions, IniFiles, UFmProjectSettings;
 
 var
   MenuCreatorNotifier: Integer = -1;
@@ -307,20 +307,6 @@ begin
     SVN_BLAME:
       Result := 'blame';
   end;
-end;
-
-function GetString(const Index: Integer) : string;
-var
-  Buffer : array[0..255] of Char;
-  ls : Integer;
-begin
-  Result := '';
-  ls := LoadString(HInstance,
-                   Index,
-                   Buffer,
-                   SizeOf(Buffer));
-  if (ls <> 0) then
-    Result := Buffer;
 end;
 
 function TTortoiseSVN.GetCurrentModule: IOTAModule;
@@ -1133,6 +1119,7 @@ var
   FileName, Cmd: string;
   SourceEditor: IOTASourceEditor;
   Line: Integer;
+  FmProjectSettings: TFmProjectSettings;
 begin
   Project := GetCurrentProject();
 
@@ -1369,7 +1356,20 @@ begin
     SVN_SETTINGS:
         TSVNExec( '/command:settings' );
     SVN_PLUGIN_PROJ_SETTINGS:
-      ShowMessage('Project settings');
+      begin
+        FmProjectSettings := TFmProjectSettings.Create(nil);
+        try
+          if (IsProject) then
+          begin
+            Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
+          end;
+          FmProjectSettings.Project := Project;
+          
+          FmProjectSettings.ShowModal;
+        finally
+          FmProjectSettings.Free;
+        end;
+      end;
     SVN_ABOUT:
         TSVNExec( '/command:about' );
     SVN_ABOUT_PLUGIN:
@@ -1488,11 +1488,9 @@ end;
 function TTortoiseSVN.GetPathForProject(Project: IOTAProject): string;
 var
   I: Integer;
-  Path, IniPath: TStringList;
+  Path: TStringList;
   ModInfo: IOTAModuleInfo;
   FilePath: string;
-  ProjPath, ProjName: string;
-  IniFile: TIniFile;
 
   ///  <summary>
   ///  Removes all subdirectories so that only the root directories are given
@@ -1541,45 +1539,6 @@ begin
     Path.Sorted := True;
     Path.Add(ExtractFilePath(Project.FileName));
 
-    {
-      Check for project-specific settings in a <ProjectName>.tsvn file.
-      If this file exists, then load all values in the [AdditionalDirs] section
-      and add the existing directories to the project path.
-
-      This way one can configure additional directories which should be updated
-      when the project is updated but are not part of the project itself like
-      configuration or graphical files.
-    }
-    try
-      ProjPath := ExtractFilePath(Project.FileName);
-      ProjName := ExtractFileName(Project.FileName);
-      ProjName := Copy(ProjName, 1, Pos(ExtractFileExt(ProjName), ProjName) - 1);
-
-      if (FileExists(ProjPath + ProjName + '.tsvn')) then
-      begin
-        // Load settings
-        IniFile := TIniFile.Create(ProjPath + ProjName + '.tsvn');
-        try
-          IniPath := TStringList.Create;
-          try
-            IniFile.ReadSectionValues('AdditionalDirs', IniPath);
-            for I := 0 to IniPath.Count - 1 do
-            begin
-              if (DirectoryExists(IniPath.ValueFromIndex[I])) then
-              begin
-                Path.Add(IniPath.ValueFromIndex[I]);
-              end;
-            end;
-          finally
-            IniPath.Free;
-          end;
-        finally
-          IniFile.Free;
-        end;
-      end;
-    except
-
-    end;
 
     for I := 0 to Project.GetModuleCount - 1 do
     begin
@@ -1592,6 +1551,8 @@ begin
           Path.Add(FilePath);
       end;
     end;
+
+    Path.AddStrings(GetDirectoriesFromTSVN(Project));
 
     while (RemoveSubdirs(Path)) do;
 

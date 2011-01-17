@@ -10,9 +10,91 @@ procedure GetModuleFiles( FileList: TStrings; Module: IOTAModule);
 
 function GetFilesForCmd(Project: IOTAProject; FileName: string): string;
 
+function GetString(const Index: Integer) : string;
+
+function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
+
+procedure SetDirectoriesToTSVN(Project: IOTAProject; Directories: TStrings);
+
 implementation
 
-uses SysUtils;
+uses SysUtils, Windows, IniFiles;
+
+function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
+var
+  ProjPath, ProjName: string;
+  IniFile: TIniFile;
+  IniPath: TStringList;
+  I: Integer;
+begin
+  {
+    Check for project-specific settings in a <ProjectName>.tsvn file.
+    If this file exists, then load all values in the [AdditionalDirs] section
+    and add the existing directories to the project path.
+
+    This way one can configure additional directories which should be updated
+    when the project is updated but are not part of the project itself like
+    configuration or graphical files.
+  }
+  Result := TStringList.Create;
+  try
+    ProjPath := ExtractFilePath(Project.FileName);
+    ProjName := ExtractFileName(Project.FileName);
+    ProjName := Copy(ProjName, 1, Pos(ExtractFileExt(ProjName), ProjName) - 1);
+
+    if (FileExists(ProjPath + ProjName + '.tsvn')) then
+    begin
+      // Load settings
+      IniFile := TIniFile.Create(ProjPath + ProjName + '.tsvn');
+      try
+        IniPath := TStringList.Create;
+        try
+          IniFile.ReadSectionValues('AdditionalDirs', IniPath);
+          for I := 0 to IniPath.Count - 1 do
+          begin
+            if (DirectoryExists(IniPath.ValueFromIndex[I])) then
+            begin
+              Result.Add(IniPath.ValueFromIndex[I]);
+            end;
+          end;
+        finally
+          IniPath.Free;
+        end;
+      finally
+        IniFile.Free;
+      end;
+    end;
+  except
+
+  end;
+end;
+
+procedure SetDirectoriesToTSVN(Project: IOTAProject; Directories: TStrings);
+var
+  ProjPath, ProjName: string;
+  IniFile: TIniFile;
+  I: Integer;
+begin
+  try
+    ProjPath := ExtractFilePath(Project.FileName);
+    ProjName := ExtractFileName(Project.FileName);
+    ProjName := Copy(ProjName, 1, Pos(ExtractFileExt(ProjName), ProjName) - 1);
+
+    IniFile := TIniFile.Create(ProjPath + ProjName + '.tsvn');
+    try
+      IniFile.EraseSection('AdditionalDirs');
+      for I := 0 to Directories.Count - 1 do
+      begin
+        IniFile.WriteString('AdditionalDirs', IntToStr(I), Directories.Strings[I]);
+      end;
+    finally
+      IniFile.Free;
+    end;
+  except
+
+  end;
+end;
+
 
 function GetCurrentProject: IOTAProject;
 var
@@ -76,6 +158,21 @@ begin
     end;
   end;
 end;
+
+function GetString(const Index: Integer) : string;
+var
+  Buffer : array[0..255] of Char;
+  ls : Integer;
+begin
+  Result := '';
+  ls := LoadString(HInstance,
+                   Index,
+                   Buffer,
+                   SizeOf(Buffer));
+  if (ls <> 0) then
+    Result := Buffer;
+end;
+
 
 function GetFilesForCmd(Project: IOTAProject; FileName: string): string;
 var
