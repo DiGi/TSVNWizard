@@ -1,1 +1,0 @@
-* GUI for additional folders (a project wide setting)
