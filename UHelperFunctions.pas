@@ -75,10 +75,22 @@ var
   IniFile: TIniFile;
   I: Integer;
 begin
+  if (Directories = nil) then
+    Exit;
+
   try
     ProjPath := ExtractFilePath(Project.FileName);
     ProjName := ExtractFileName(Project.FileName);
     ProjName := Copy(ProjName, 1, Pos(ExtractFileExt(ProjName), ProjName) - 1);
+
+    // if there are no directories and the file exists remove it and don't leave
+    // the empty file on disk
+    if (Directories.Count = 0) and
+       (FileExists(ProjPath + ProjName + '.tsvn')) then
+    begin
+      DeleteFile(PAnsiChar(ProjPath + ProjName + '.tsvn'));
+      Exit;
+    end;
 
     IniFile := TIniFile.Create(ProjPath + ProjName + '.tsvn');
     try

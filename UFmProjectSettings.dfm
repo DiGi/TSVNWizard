@@ -68,6 +68,7 @@ object FmProjectSettings: TFmProjectSettings
     OnClick = BtnCancelClick
   end
   object OpenDialog: TOpenDialog
+    FileName = 'FOLDER'
     Filter = '*.*|*.*'
     Options = [ofPathMustExist, ofEnableSizing]
     Left = 80

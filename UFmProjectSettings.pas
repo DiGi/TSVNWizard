@@ -77,6 +77,7 @@ begin
   BtnOk.Caption          := GetString(33);
   BtnCancel.Caption      := GetString(34);
   OpenDialog.Title       := GetString(35);
+  OpenDialog.FileName    := GetString(36);
 end;
 
 procedure TFmProjectSettings.SetProject(const Value: IOTAProject);
