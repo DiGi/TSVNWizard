@@ -25,7 +25,7 @@ uses
   Classes, Controls, Graphics, ImgList, ExtCtrls, ActnList, XMLIntf;
 
 const
-  VERSION = '1.5.99';
+  VERSION = '1.6.0';
 
 const
   SVN_PROJECT_EXPLORER = 0;
@@ -1776,6 +1776,12 @@ begin
       end;
 
       RemoveEditorNotifier(Module);
+
+      // If a project is closed, remove all the modified files from the list
+      if IsProjectFile(FileName, Project) then
+      begin
+        ModifiedFiles.Clear;
+      end;
     end;
   end;
 
@@ -2185,6 +2191,12 @@ procedure TModuleNotifier.RemoveBindings;
 var
   Notifier: Integer;
 begin
+  if (_Module = nil) then
+  begin
+    _Notifier := -1;
+    Exit;
+  end;
+
   WriteDebug('TModuleNotifier.RemoveBindings (' + _Module.FileName + ')');
 
   Notifier := _Notifier;
