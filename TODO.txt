@@ -1,0 +1,1 @@
+* If a path is added, it should be checked if it's a relative one.
