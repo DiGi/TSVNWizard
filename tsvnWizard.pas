@@ -48,10 +48,11 @@ const
   SVN_BLAME = 17;
   SVN_SETTINGS = 18;
   SVN_ABOUT = 19;
-  SVN_SEPERATOR_1 = 20;
-  SVN_ABOUT_PLUGIN = 21;
-  SVN_PLUGIN_PROJ_SETTINGS = 22;
-  SVN_VERB_COUNT = 23;
+  SVN_UPDATE_REV = 20;
+  SVN_SEPERATOR_1 = 21;
+  SVN_ABOUT_PLUGIN = 22;
+  SVN_PLUGIN_PROJ_SETTINGS = 23;
+  SVN_VERB_COUNT = 24;
 
 var
   TSVNPath: string;
@@ -333,7 +334,8 @@ begin
       Result:= 'check';
     SVN_ADD:
       Result:= 'add';
-    SVN_UPDATE:
+    SVN_UPDATE,
+    SVN_UPDATE_REV:
       Result:= 'update';
     SVN_COMMIT:
       Result:= 'commit';
@@ -1124,7 +1126,8 @@ begin
     SVN_ADD:
       if GetCurrentProject <> nil then
         Result:= vsEnabled;
-    SVN_UPDATE:
+    SVN_UPDATE,
+    SVN_UPDATE_REV:
       if GetCurrentProject <> nil then
         Result:= vsEnabled;
     SVN_COMMIT:
@@ -1267,7 +1270,8 @@ begin
 
         TSVNExec(Cmd);
       end;
-    SVN_UPDATE:
+    SVN_UPDATE,
+    SVN_UPDATE_REV:
       if (not IsPopup) or (IsProject) then
       begin
         {
@@ -1293,14 +1297,22 @@ begin
           else if (Response = mrCancel) then
             Exit;
 
-          TSVNExec( '/command:update /notempfile /path:' + AnsiQuotedStr( GetPathForProject(Project), '"' ) );
+          Cmd := '/command:update /notempfile';
+          if (index = SVN_UPDATE_REV) then
+            Cmd := Cmd + ' /rev';
+          Cmd := Cmd + ' /path:' + AnsiQuotedStr( GetPathForProject(Project), '"');
+
+          TSVNExec(Cmd);
         end;
       end else
       begin
         {
           The call is from the Popup and a file is selected
         }
-        Cmd := '/command:update /notempfile /path:' + AnsiQuotedStr(CmdFiles, '"');
+        Cmd := '/command:update /notempfile';
+        if (index = SVN_UPDATE_REV) then
+          Cmd := Cmd + ' /rev';
+        Cmd := Cmd + ' /path:' + AnsiQuotedStr(CmdFiles, '"');
 
         TSVNExec(Cmd);
       end;
