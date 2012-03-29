@@ -287,6 +287,7 @@ uses TypInfo, Contnrs, UHelperFunctions, IniFiles, UFmProjectSettings;
 var
   MenuCreatorNotifier: Integer = -1;
   IDENotifierIndex   : Integer = -1;
+  AboutBoxIndex      : Integer = -1;
   NotifierList : TStringList;
   TortoiseSVN: TTortoiseSVN;
   EditPopup: TPopupMenu;
@@ -2356,6 +2357,36 @@ begin
   end;
 end;
 
+procedure RegisterAboutBox;
+var
+  //ProductImage: HBITMAP;
+  AboutBoxServices: IOTAAboutBoxServices;
+begin
+  if (Supports(BorlandIDEServices,IOTAAboutBoxServices, AboutBoxServices)) then
+  begin
+    // ProductImage := LoadBitmap(FindResourceHInstance(HInstance), 'JVCLSPLASH');
+    AboutBoxIndex := AboutBoxServices.AddPluginInfo(
+                        Format('TortoiseSVN Plugin %s', [VERSION]),
+                        Format('TortoiseSVN Plugin %s', [VERSION]) + #13#10 +
+                        'http://sourceforge.net/projects/delphitsvnaddin/' + #13#10 +
+                        'Licensed under LGPL 3.0 or later' + #13#10 +
+                        'License http://www.gnu.org/licenses/lgpl-3.0.txt',
+                        0, False, 'LGPL 3.0');
+  end;
+end;
+
+procedure UnregisterAboutBox;
+var
+  AboutBoxServices: IOTAAboutBoxServices;
+begin
+  if (AboutBoxIndex <> -1) and Supports(BorlandIDEServices,IOTAAboutBoxServices, AboutBoxServices) then
+  begin
+    AboutBoxServices.RemovePluginInfo(AboutBoxIndex);
+    AboutBoxIndex := -1;
+  end;
+end;
+
+
 initialization
   WriteDebug('initialization ' + DateTimeToStr(Now));
   NotifierList := TStringList.Create;
@@ -2366,6 +2397,7 @@ initialization
   ModifiedFiles.Sorted := True;
   ModuleNotifierList := TStringList.Create;
   ModuleNotifierList.Sorted := True;
+  RegisterAboutBox;
 
 finalization
   WriteDebug('finalization ' + DateTimeToStr(Now));
@@ -2428,6 +2460,11 @@ finalization
       EditMenuItem.Free;
       EditMenuItem := nil;
     end;
+  except
+  end;
+
+  try
+    UnRegisterAboutBox;
   except
   end;
 end.
