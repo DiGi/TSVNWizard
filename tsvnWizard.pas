@@ -28,31 +28,31 @@ const
   VERSION = '1.6.0';
 
 const
-  SVN_PROJECT_EXPLORER = 0;
-  SVN_LOG_PROJECT = 1;
-  SVN_LOG_FILE = 2;
-  SVN_CHECK_MODIFICATIONS = 3;
-  SVN_ADD = 4;                                                             
-  SVN_UPDATE = 5;
-  SVN_COMMIT = 6;
-  SVN_DIFF = 7;
-  SVN_REVERT = 8;
-  SVN_REPOSITORY_BROWSER = 9;
-  SVN_EDIT_CONFLICT = 10;
-  SVN_CONFLICT_OK = 11;
-  SVN_CREATE_PATCH = 12;
-  SVN_USE_PATCH = 13;
-  SVN_CLEAN = 14;
-  SVN_IMPORT = 15;
-  SVN_CHECKOUT = 16;
-  SVN_BLAME = 17;
-  SVN_SETTINGS = 18;
-  SVN_ABOUT = 19;
-  SVN_UPDATE_REV = 20;
-  SVN_SEPERATOR_1 = 21;
-  SVN_ABOUT_PLUGIN = 22;
-  SVN_PLUGIN_PROJ_SETTINGS = 23;
-  SVN_VERB_COUNT = 24;
+  SVN_PROJECT_EXPLORER      =  0;
+  SVN_LOG_PROJECT           =  1;
+  SVN_LOG_FILE              =  2;
+  SVN_CHECK_MODIFICATIONS   =  3;
+  SVN_ADD                   =  4;
+  SVN_UPDATE                =  5;
+  SVN_UPDATE_REV            =  6;
+  SVN_COMMIT                =  7;
+  SVN_DIFF                  =  8;
+  SVN_REVERT                =  9;
+  SVN_REPOSITORY_BROWSER    = 10;
+  SVN_EDIT_CONFLICT         = 11;
+  SVN_CONFLICT_OK           = 12;
+  SVN_CREATE_PATCH          = 13;
+  SVN_USE_PATCH             = 14;
+  SVN_CLEAN                 = 15;
+  SVN_IMPORT                = 16;
+  SVN_CHECKOUT              = 17;
+  SVN_BLAME                 = 18;
+  SVN_SETTINGS              = 19;
+  SVN_ABOUT                 = 20;
+  SVN_SEPERATOR_1           = 21;
+  SVN_ABOUT_PLUGIN          = 22;
+  SVN_PLUGIN_PROJ_SETTINGS  = 23;
+  SVN_VERB_COUNT            = 24;
 
 var
   TSVNPath: string;
