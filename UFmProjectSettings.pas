@@ -49,19 +49,54 @@ var
 
 implementation
 
-uses UHelperFunctions;
+uses UHelperFunctions, StrUtils;
+
+{ Maybe helpful?
+function PathIsRelativeA(lpszPath: PAnsiChar): BOOL; stdcall; external 'shlwapi.dll' name 'PathIsRelativeA';
+function PathIsRelativeW(lpszPath: PWideChar): BOOL; stdcall; external 'shlwapi.dll' name 'PathIsRelativeW';
+}
 
 {$R *.dfm}
 
 procedure TFmProjectSettings.BtnAddClick(Sender: TObject);
 var
-  ToAdd: string;
+  ToAdd, ToAddRel: string;
+  Answer: Integer;
 begin
   if (OpenDialog.Execute) then
   begin
     ToAdd := ExtractFilePath(OpenDialog.FileName);
-    if (LbDirectories.Items.IndexOf(ToAdd) = -1) then
-      LbDirectories.Items.Add(ToAdd);
+
+    // If the path is the project' (sub-)directory than it's already in the list!
+    if (StartsStr(ExtractFilePath(_Project.FileName), ToAdd)) then
+      Exit;
+
+    // Make the path a relative one, so the structure within the SVN stays intact
+    ToAddRel := ExtractRelativePath(ExtractFilePath(_Project.FileName), ToAdd);
+
+    {
+      Check if the path was not added. Check the relative and the absolute one
+      to not add a directory twice.
+    }
+    if (LbDirectories.Items.IndexOf(ToAdd) = -1) and (LbDirectories.Items.IndexOf(ToAddRel) = -1) then
+    begin
+      // If the path' differ, than it is a relative one...
+      if (ToAddRel <> ToAdd) then
+      begin
+        // Ask if the relative path should be chosen
+        Answer := MessageDlg(Format(GetString(37), [ToAddRel]),
+                   mtConfirmation, [mbYes, mbNo, mbCancel], 0);
+
+        case Answer of
+          mrYes: LbDirectories.Items.Add(ToAddRel);
+          mrNo:  LbDirectories.Items.Add(ToAdd);
+        end;
+      end else
+      begin
+        // ...otherwise just add the absolute one
+        LbDirectories.Items.Add(ToAdd);
+      end;
+    end;
   end;
 end;
 

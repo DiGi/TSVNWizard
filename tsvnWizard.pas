@@ -1612,7 +1612,6 @@ begin
     Path.Sorted := True;
     Path.Add(ExtractFilePath(Project.FileName));
 
-
     for I := 0 to Project.GetModuleCount - 1 do
     begin
       ModInfo := Project.GetModule(I);
