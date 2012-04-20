@@ -25,7 +25,7 @@ uses
   Classes, Controls, Graphics, ImgList, ExtCtrls, ActnList, XMLIntf;
 
 const
-  VERSION = '1.6.0';
+  VERSION = '1.6.99';
 
 const
   SVN_PROJECT_EXPLORER      =  0;
