@@ -987,10 +987,10 @@ end;
 
 class procedure TTortoiseSVN.TSVNMergeExec(params: string);
 var
-  cmdLine: AnsiString;
+  CmdLine: AnsiString;
 begin
-  cmdLine:= AnsiString( TMergePath + ' ' + params );
-  WinExec( pansichar(cmdLine), SW_SHOW );
+  CmdLine := AnsiString(TMergePath + ' ' + params);
+  WinExec( PAnsiChar(CmdLine), SW_SHOW );
 end;
 
 procedure TTortoiseSVN.DiffClick( Sender: TObject );
@@ -1112,59 +1112,41 @@ function TTortoiseSVN.GetVerbState(Index: Integer): Word;
 begin
   Result:= 0;
   case index of
-    SVN_PROJECT_EXPLORER:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
-    SVN_LOG_PROJECT:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
-    SVN_LOG_FILE:
-      // this verb state is updated by the menu itself
-      ;
-    SVN_CHECK_MODIFICATIONS:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
-    SVN_ADD:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
+    SVN_PROJECT_EXPLORER,
+    SVN_LOG_PROJECT,
+    SVN_CHECK_MODIFICATIONS,
+    SVN_ADD,
     SVN_UPDATE,
-    SVN_UPDATE_REV:
+    SVN_UPDATE_REV,
+    SVN_COMMIT,
+    SVN_REVERT,
+    SVN_BLAME,
+    SVN_CREATE_PATCH,
+    SVN_USE_PATCH,
+    SVN_CLEAN,
+    SVN_IMPORT:
+    begin
+      // Only enabled if a project is loaded
       if GetCurrentProject <> nil then
         Result:= vsEnabled;
-    SVN_COMMIT:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
-    SVN_DIFF:
-      // this verb state is updated by the menu itself
-      ;
-    SVN_REVERT:
-      if GetCurrentProject <> nil then
-        Result:= vsEnabled;
-    SVN_REPOSITORY_BROWSER:
-      Result:= vsEnabled;
-    SVN_SETTINGS,
-    SVN_PLUGIN_PROJ_SETTINGS:
-      Result:= vsEnabled;
-    SVN_ABOUT,
-    SVN_ABOUT_PLUGIN:
-      Result:= vsEnabled;
+    end;
+    SVN_LOG_FILE,
+    SVN_DIFF,
     SVN_EDIT_CONFLICT,
     SVN_CONFLICT_OK:
-      // these verb's state is updated by the menu itself
-      ;
-    SVN_CREATE_PATCH:
-      Result := vsEnabled;
-    SVN_USE_PATCH:
-      Result := vsEnabled;
-    SVN_CLEAN:
-      Result := vsEnabled;
-    SVN_IMPORT:
-      Result := vsEnabled;
+    begin
+      // these verbs state is updated by the menu itself
+    end;
+    SVN_REPOSITORY_BROWSER,
+    SVN_SETTINGS,
+    SVN_PLUGIN_PROJ_SETTINGS,
+    SVN_ABOUT,
+    SVN_ABOUT_PLUGIN,
     SVN_CHECKOUT:
+    begin
+      // Always enabled
       Result := vsEnabled;
-    SVN_BLAME:
-      if GetCurrentProject <> nil then
-        Result := vsEnabled;
+    end;
   end;
 end;
 
@@ -1172,8 +1154,8 @@ class procedure TTortoiseSVN.TSVNExec( Params: string );
 var
   CmdLine: AnsiString;
 begin
-  CmdLine := AnsiString(TSVNPath + ' ' + params );
-  WinExec( pansichar(cmdLine), SW_SHOW );
+  CmdLine := AnsiString(TSVNPath + ' ' + params);
+  WinExec( PAnsiChar(cmdLine), SW_SHOW );
 end;
 
 procedure TTortoiseSVN.ExecuteVerb(Index: Integer);
