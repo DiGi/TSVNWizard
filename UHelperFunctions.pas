@@ -103,7 +103,7 @@ begin
     if (Directories.Count = 0) and
        (FileExists(ProjPath + ProjName + '.tsvn')) then
     begin
-      DeleteFile(PAnsiChar(ProjPath + ProjName + '.tsvn'));
+      DeleteFile(PChar(ProjPath + ProjName + '.tsvn'));
       Exit;
     end;
 
