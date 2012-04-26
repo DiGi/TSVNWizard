@@ -813,6 +813,9 @@ begin
       Diff.Action:= nil;
       Diff.OnClick:= nil;
       Diff.Enabled:= False;
+      Diff.Caption:= GetString(SVN_DIFF);
+      if (not IsPopup) then
+        Diff.ImageIndex := Actions[SVN_DIFF].ImageIndex;
       Diff.Clear;
     end
     else if (Parent.Items[I].Tag = SVN_LOG_FILE) then
@@ -821,6 +824,9 @@ begin
       Log.Action := nil;
       Log.OnClick := nil;
       Log.Enabled := False;
+      Log.Caption:= GetString(SVN_LOG_FILE);
+      if (not IsPopup) then
+        Log.ImageIndex := Actions[SVN_LOG_FILE].ImageIndex;
       Log.Clear();
     end
     else if (Parent.Items[I].Tag = SVN_EDIT_CONFLICT) then
@@ -829,6 +835,9 @@ begin
       Conflict.Action := nil;
       Conflict.OnClick := nil;
       Conflict.Enabled := False;
+      Conflict.Caption:= GetString(SVN_EDIT_CONFLICT);
+      if (not IsPopup) then
+        Conflict.ImageIndex := Actions[SVN_EDIT_CONFLICT].ImageIndex;
       Conflict.Clear();
     end
     else if (Parent.Items[I].Tag = SVN_CONFLICT_OK) then
@@ -837,6 +846,9 @@ begin
       ConflictOk.Action := nil;
       ConflictOk.OnClick := nil;
       ConflictOk.Enabled := False;
+      ConflictOk.Caption:= GetString(SVN_CONFLICT_OK);
+      if (not IsPopup) then
+        ConflictOk.ImageIndex := Actions[SVN_CONFLICT_OK].ImageIndex;
       ConflictOk.Clear();
     end;
   end;
@@ -880,41 +892,19 @@ begin
       CmdFiles := CmdFiles + '*';
   end;
 
-  if Files.Count > 0 then
+  if (Files.Count > 0) then
   begin
     if (Diff <> nil) then
-    begin
       Diff.Enabled:= True;
-      Diff.Caption:= GetString(SVN_DIFF);
-      if (not IsPopup) then
-      begin
-        Diff.ImageIndex := Actions[SVN_DIFF].ImageIndex;
-      end;
-    end;
 
     if (Log <> nil) then
-    begin
       Log.Enabled := True;
-      Log.Caption := GetString(SVN_LOG_FILE);
-      if (not IsPopup) then
-        Log.ImageIndex := Actions[SVN_LOG_FILE].ImageIndex;
-    end;
 
     if (Conflict <> nil) then
-    begin
       Conflict.Enabled := True;
-      Conflict.Caption := GetString(SVN_EDIT_CONFLICT);
-      if (not IsPopup) then
-        Conflict.ImageIndex := Actions[SVN_EDIT_CONFLICT].ImageIndex;
-    end;
 
     if (ConflictOk <> nil) then
-    begin
       ConflictOk.Enabled := True;
-      ConflictOk.Caption := GetString(SVN_CONFLICT_OK);
-      if (not IsPopup) then
-        ConflictOk.ImageIndex := Actions[SVN_CONFLICT_OK].ImageIndex;
-    end;
 
     if Files.Count > 1 then
     begin
