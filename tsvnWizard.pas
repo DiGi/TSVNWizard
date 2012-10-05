@@ -466,12 +466,14 @@ end;
 
 procedure GetModifiedItems( ItemList: TStrings );
 begin
+  WriteDebug('TGetModifiedItems() :: start');
   ItemList.Clear;
-  
+
   if Assigned(ModifiedFiles) and (ModifiedFiles.Count > 0) then
   begin
     ItemList.AddStrings(ModifiedFiles);
   end;
+  WriteDebug('TGetModifiedItems() :: done');
 end;
 
 function TTortoiseSVN.AddMenu(const Ident: string): TMenuItem;
@@ -518,6 +520,10 @@ var
   ModifiedItemsMessage: string;
   I: Integer;
 begin
+  try
+    WriteDebug(Format('TTortoiseSVN.CheckModified(%s) :: start', [Project.FileName]));
+  except
+  end;
   Result := mrNo;
 
   ItemList := TStringList.Create;
@@ -539,6 +545,11 @@ begin
   if ModifiedItems then
   begin
     Result := MessageDlg( ModifiedItemsMessage, mtWarning, [mbYes, mbNo, mbCancel], 0 );
+  end;
+
+  try
+    WriteDebug(Format('TTortoiseSVN.CheckModified(%s) :: done', [Project.FileName]));
+  except
   end;
 end;
 
@@ -1888,11 +1899,14 @@ var
   I, Idx: Integer;
   EditorNotifier: TEditorNotifier;
 begin
-  WriteDebug('TIdeNotifier.RemoveEditorNotifier (' + Module.FileName + ')');
+  try
+    WriteDebug(Format('TIdeNotifier.RemoveEditorNotifier (%s) :: start', [Module.FileName]));
+  except
+  end;
 
   for I := 0 to Module.GetModuleFileCount - 1 do
   begin
-    WriteDebug('TIdeNotifier.RemoveEditorNotifier :: ' + IntToStr(I));
+    WriteDebug(Format('TIdeNotifier.RemoveEditorNotifier :: %d', [I]));
     Editor := nil;
     try
       Editor := Module.GetModuleFileEditor(I);
@@ -1913,7 +1927,10 @@ begin
     end;
   end;
 
-  WriteDebug('TIdeNotifier.RemoveEditorNotifier :: done');
+  try
+    WriteDebug(Format('TIdeNotifier.RemoveEditorNotifier (%s) :: done', [Module.FileName]));
+  except
+  end;
 end;
 
 { TProjectNotifier }
@@ -1942,13 +1959,14 @@ procedure TProjectNotifier.ModuleRenamed(const AOldFileName,
 var
   I, Index : Integer;
   EditorNotifier: TEditorNotifier;
-  ModuleNotifier: TModuleNotifier; 
+  ModuleNotifier: TModuleNotifier;
+  Idx: Integer; 
 begin
-  WriteDebug('TProjectNotifier.ModuleRenamed (' + AOldFileName + ' to ' + ANewFileName + ')');
+  WriteDebug(Format('TProjectNotifier.ModuleRenamed ("%s" to "%s")', [AOldFileName, ANewFileName]));
 
   if NotifierList.Find(AOldFileName, I) then
   begin
-    WriteDebug('NotifierList Index: ' + IntToStr(I));
+    WriteDebug(Format('NotifierList Index: %d', [I]));
     Index := Integer(NotifierList.Objects[I]);
     NotifierList.Delete(I);
     NotifierList.AddObject(ANewFileName, Pointer(Index));
@@ -1956,7 +1974,7 @@ begin
 
   if ModuleNotifierList.Find(AOldFileName, I) then
   begin
-    WriteDebug('ModuleNotifierList Index: ' + IntToStr(I));
+    WriteDebug(Format('ModuleNotifierList Index: %d', [I]));
     ModuleNotifier := TModuleNotifier(ModuleNotifierList.Objects[I]);
     ModuleNotifier.FileName := ANewFileName;
     ModuleNotifierList.Delete(I);
@@ -1965,17 +1983,24 @@ begin
 
   if EditorNotifierList.Find(AOldFileName, I) then
   begin
-    WriteDebug('EditorNotifierList Index: ' + IntToStr(I));
+    WriteDebug(Format('EditorNotifierList Index: %d', [I]));
     EditorNotifier := TEditorNotifier(EditorNotifierList.Objects[I]);
     EditorNotifierList.Delete(I);
     EditorNotifierList.AddObject(ANewFileName, EditorNotifier);
   end;
+
+  // The file is renamed (and saved), so the old one is no longer part of the
+  // project and should therefore no longer be treated as "modified".
+  WriteDebug(Format('"%s%" renamed, removing from "modified list"', [AOldFileName]));
+  if (ModifiedFiles.Find(AOldFileName, Idx)) then
+    ModifiedFiles.Delete(Idx);
 
   FFileName := ANewFileName;
 end;
 
 procedure TProjectNotifier.ModuleRenamed(const NewName: string);
 begin
+  WriteDebug(Format('TProjectNotifier.ModuleRenamed (%s)', [NewName]));
   ModuleRenamed(FFileName, NewName);
 end;
 
@@ -2009,7 +2034,7 @@ begin
 
     for I := 0 to NotifierList.Count -1 do
     begin
-      WriteDebug('FinalizeNotifiers :: Notifier ' + IntToStr(I + 1) + ' / ' + IntToStr(NotifierList.Count));
+      WriteDebug(Format('FinalizeNotifiers :: Notifier %d / %d', [I+1, NotifierList.Count]));
 
       Index := Integer(NotifierList.Objects[I]);
       Module := ModServices.FindModule(NotifierList[I]);
@@ -2035,7 +2060,8 @@ begin
   try
     for I := 0 to EditorNotifierList.Count -1 do
     begin
-      WriteDebug('FinalizeEditorNotifiers :: Notifier ' + IntToStr(I + 1) + ' / ' + IntToStr(EditorNotifierList.Count));
+      WriteDebug(Format('FinalizeEditorNotifiers :: Notifier %d / %d', [I+1, EditorNotifierList.Count]));
+
       EditorNotifier := TEditorNotifier(EditorNotifierList.Objects[I]);
       EditorNotifier.RemoveBindings;
       try
@@ -2065,7 +2091,7 @@ var
   ModInfo: IOTAModuleInfo;
   Module: IOTAModule;
 begin
-  WriteDebug('TProjectNotifier.ModuleAdded (' + AFileName + ')');
+  WriteDebug(Format('TProjectNotifier.ModuleAdded (%s)', [AFileName]));
 
   {
     After adding the module, register a notifier to check for changes on the file
@@ -2085,12 +2111,12 @@ var
   Idx: Integer;
   ModuleNotifier: TModuleNotifier;
 begin
-  WriteDebug('TProjectNotifier.ModuleRemoved (' + AFileName + ')');
+  WriteDebug(Format('TProjectNotifier.ModuleRemoved (%s)', [AFileName]));
 
   // If a module is removed from the project also remove the module notifier
   if (ModuleNotifierList.Find(AFileName, Idx)) then
   begin
-    WriteDebug('Index ' + IntToStr(Idx));
+    WriteDebug(Format('Index: %d', [Idx]));
     
     ModuleNotifier := TModuleNotifier(ModuleNotifierList.Objects[Idx]);
     ModuleNotifierList.Delete(Idx);
@@ -2157,7 +2183,7 @@ end;
 
 destructor TModuleNotifier.Destroy;
 begin
-  WriteDebug('TModuleNotifier.Destroy (' + _Module.FileName + ')');
+  WriteDebug(Format('TModuleNotifier.Destroy (%s)', [_Module.FileName]));
   RemoveBindings;
 
   inherited Destroy;
@@ -2181,7 +2207,7 @@ begin
     Exit;
   end;
 
-  WriteDebug('TModuleNotifier.RemoveBindings (' + _Module.FileName + ')');
+  WriteDebug(Format('TModuleNotifier.RemoveBindings (%s)', [_Module.FileName]));
 
   Notifier := _Notifier;
   _Notifier := -1;
@@ -2189,7 +2215,7 @@ begin
   try
     if (Notifier <> -1) then
     begin
-      WriteDebug('Removing Notifier ' + IntToStr(Notifier));
+      WriteDebug(Format('Removing Notifier %d', [Notifier]));
       _Module.RemoveNotifier(Notifier);
     end;
   except
@@ -2248,13 +2274,17 @@ var
   Idx: Integer;
   I: Integer;
 begin
+  WriteDebug('TEditorNotifier.AfterSave :: start');
+
   // If a file (*.pas) is saved, the corresponding files (*.dfm) are also saved
-  // so it's safe to remove them from the list 
+  // so it's safe to remove them from the list
   for I := 0 to _Editor.Module.ModuleFileCount - 1 do
   begin
     if (ModifiedFiles.Find(_Editor.Module.ModuleFileEditors[I].FileName, Idx)) then
       ModifiedFiles.Delete(Idx);
   end;
+
+  WriteDebug('TEditorNotifier.AfterSave :: done');
 end;
 
 constructor TEditorNotifier.Create(const Editor: IOTAEditor);
@@ -2268,7 +2298,7 @@ end;
 
 destructor TEditorNotifier.Destroy;
 begin
-  WriteDebug('TEditorNotifier.Destroy (' + _Editor.FileName + ')');
+  WriteDebug(Format('TEditorNotifier.Destroy (%s)', [_Editor.FileName]));
   RemoveBindings;
 
   inherited;
@@ -2276,7 +2306,7 @@ end;
 
 procedure TEditorNotifier.Destroyed;
 begin
-  WriteDebug('TEditorNotifier.Destroyed (' + _Editor.FileName + ')');
+  WriteDebug(Format('TEditorNotifier.Destroyed (%s)', [_Editor.FileName]));
   RemoveBindings;
 
   inherited;
@@ -2292,7 +2322,7 @@ procedure TEditorNotifier.RemoveBindings;
 var
   Notifier: Integer;
 begin
-  WriteDebug('TEditorNotifier.RemoveBindings (' + _Editor.FileName + ')');
+  WriteDebug(Format('TEditorNotifier.RemoveBindings (%s)', [_Editor.FileName]));
   
   Notifier := _Notifier;
   _Notifier := -1;
@@ -2300,7 +2330,7 @@ begin
   if (Notifier <> -1) then
   begin
     try
-      WriteDebug('Removing Notifier ' + IntToStr(Notifier));
+      WriteDebug(Format('Removing Notifier %d', [Notifier]));
       _Editor.RemoveNotifier(Notifier);
     except
     end;
@@ -2379,6 +2409,9 @@ finalization
     begin
       WriteDebug('Yes, I should!');
       (BorlandIDEServices as IOTAProjectManager).RemoveMenuCreatorNotifier(MenuCreatorNotifier);
+    end else
+    begin
+      WriteDebug('Nope!');
     end;
   except
   end;
@@ -2419,6 +2452,9 @@ finalization
       WriteDebug('Yes, I should!');
       EditPopup.Items.Remove(EditMenuItem);
       EditPopup := nil;
+    end else
+    begin
+      WriteDebug('Nope!');
     end;
   except
   end;
@@ -2430,6 +2466,9 @@ finalization
       WriteDebug('Yes, I should!');
       EditMenuItem.Free;
       EditMenuItem := nil;
+    end else
+    begin
+      WriteDebug('Nope!');
     end;
   except
   end;
