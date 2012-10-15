@@ -1991,7 +1991,7 @@ begin
 
   // The file is renamed (and saved), so the old one is no longer part of the
   // project and should therefore no longer be treated as "modified".
-  WriteDebug(Format('"%s%" renamed, removing from "modified list"', [AOldFileName]));
+  WriteDebug(Format('"%s" renamed, removing from "modified list"', [AOldFileName]));
   if (ModifiedFiles.Find(AOldFileName, Idx)) then
     ModifiedFiles.Delete(Idx);
 
