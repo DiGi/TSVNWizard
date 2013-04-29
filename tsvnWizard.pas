@@ -718,6 +718,8 @@ begin
       Actions[I].ActionList := (BorlandIDEServices as INTAServices).ActionList;
       Actions[I].Caption := GetVerb(I);
       Actions[I].Hint := GetVerb(I);
+      Actions[I].Category := 'TSVN';
+      Actions[I].Name := 'SVNAction' + IntToStr(I);
 
       if (Bitmaps[I].Width = 16) and (Bitmaps[I].height = 16) then
       begin
