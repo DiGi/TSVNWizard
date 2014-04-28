@@ -66,8 +66,8 @@ var
 type
   TProjectMenuTimer = class;
 
-  TTortoiseSVN = class(TNotifierObject, IOTANotifier, IOTAWizard,
-                       INTAProjectMenuCreatorNotifier)
+  TTortoiseSVN = class(TNotifierObject, IOTANotifier, IOTAWizard
+                       {$if CompilerVersion > 18}, INTAProjectMenuCreatorNotifier{$ifend} )
   strict private
     IsPopup: Boolean;
     IsProject: Boolean;
@@ -1058,10 +1058,12 @@ begin
   MainMenu := (BorlandIDEServices as INTAServices).MainMenu;
   MainMenu.Items.Insert(MainMenu.Items.Count-1, TSvnMenu);
 
+  {$if CompilerVersion > 18} // Delphi 2007+
   if Supports(BorlandIDEServices, IOTAProjectManager, ProjManager) then
   begin
     MenuCreatorNotifier := ProjManager.AddMenuCreatorNotifier(Self);
   end;
+  {$ifend}
 
   if Supports(BorlandIDEServices, IOTAServices, Services) then
   begin
