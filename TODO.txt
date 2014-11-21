@@ -1,0 +1,2 @@
+* Delphi XE3 (and others?): delete from SVN not working
+* Delphi XE3 (and others?): implement new ToolsAPI interface
