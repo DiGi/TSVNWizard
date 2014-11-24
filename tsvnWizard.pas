@@ -382,7 +382,9 @@ var
   ModServices: IOTAModuleServices;
   Module: IOTAModule;
   Project: IOTAProject;
+  {$if CompilerVersion < 21} // pre Delphi2010
   ModInfo: IOTAModuleInfo;
+  {$ifend}
   FileName: string;
 begin
   FileList.Clear;
@@ -391,11 +393,15 @@ begin
   begin
     Project := (BorlandIDEServices as IOTAProjectManager).GetCurrentSelection(FileName);
 
+    {$if CompilerVersion >= 21} // Delphi2010+
+    Project.GetAssociatedFiles(FileName, FileList);
+    {$else}
     ModInfo := Project.FindModuleInfo(FileName);
     if (ModInfo <> nil) then
     begin
       GetModuleFiles(FileList, ModInfo.OpenModule);
     end;
+    {$ifend}
   end else
   begin
     ModServices := BorlandIDEServices as IOTAModuleServices;
@@ -432,7 +438,9 @@ var
   Ident: string;
   Project: IOTAProject;
   ItemList: TStringList;
+  {$if CompilerVersion < 21} // pre Delphi2010
   ModInfo: IOTAModuleInfo;
+  {$ifend}
 begin
   if (IsPopup) and (not IsEditor) then
   begin
@@ -444,11 +452,18 @@ begin
 
     ItemList := TStringList.Create;
     try
+      {$if CompilerVersion >= 21} // Delphi2010+
+      Project.GetAssociatedFiles(Ident, ItemList);
+      {$else}
       ModInfo := Project.FindModuleInfo(Ident);
       if (ModInfo <> nil) then
       begin
         GetModuleFiles(ItemList, ModInfo.OpenModule);
+      end;
+      {$ifend}
 
+      if (ItemList.Count > 0) then
+      begin
         Files.AddStrings(ItemList);
       end else
       begin
@@ -795,7 +810,9 @@ var
   Ident: string;
   Parent: TMenuItem;
   Project: IOTAProject;
+  {$if CompilerVersion < 21} // pre Delphi2010
   ModInfo: IOTAModuleInfo;
+  {$ifend}
 begin
   // update the diff item and submenu; the diff action is handled by the
   // menu item itself, not by the action list
@@ -876,11 +893,18 @@ begin
 
     ItemList := TStringList.Create;
     try
+      {$if CompilerVersion >= 21} // Delphi2010+
+      Project.GetAssociatedFiles(Ident, ItemList);
+      {$else}
       ModInfo := Project.FindModuleInfo(Ident);
       if (ModInfo <> nil) then
       begin
         GetModuleFiles(ItemList, ModInfo.OpenModule);
+      end;
+      {$ifend}
 
+      if (ItemList.Count > 0) then
+      begin
         Files.AddStrings(ItemList);
       end else
       begin
@@ -2128,6 +2152,7 @@ begin
   if (MessageDlg(Format(GetString(29), [ExtractFileName(AFileName)]), mtConfirmation, [mbYes,mbNo], 0) <> mrYes) then
     Exit;
 
+  // TODO : Files already dismissed after remove?
   Cmd := '/command:remove /notempfile /path:' + AnsiQuotedStr(GetFilesForCmd(FProject, AFileName), '"');
 
   TTortoiseSVN.TSVNExec(Cmd);

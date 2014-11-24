@@ -17,7 +17,9 @@ unit UHelperFunctions;
 
 interface
 
-uses ToolsAPI, Classes;
+uses
+  ToolsAPI, Classes
+;
 
 function GetCurrentProject: IOTAProject;
 
@@ -33,7 +35,9 @@ procedure SetDirectoriesToTSVN(Project: IOTAProject; Directories: TStrings);
 
 implementation
 
-uses SysUtils, Windows, IniFiles;
+uses
+  SysUtils, Windows, IniFiles
+;
 
 function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
 var
@@ -154,7 +158,7 @@ begin
   end;
 end;
 
-procedure GetModuleFiles( FileList: TStrings; Module: IOTAModule);
+procedure GetModuleFiles(FileList: TStrings; Module: IOTAModule);
 var
   FileEditor: IOTAEditor;
   I: integer;
@@ -205,23 +209,32 @@ function GetFilesForCmd(Project: IOTAProject; FileName: string): string;
 var
   ItemList: TStringList;
   I: Integer;
+  {$if CompilerVersion < 21} // pre Delphi2010
   ModInfo: IOTAModuleInfo;
+  {$ifend}
 begin
   Result := '';
 
   ItemList := TStringList.Create;
   try
+    {
+      Since Delphi2010 there is a dedicated method to get the associated files
+      from a file (throw in a .pas and you get the .pas and the .dfm).
+    }
+    {$if CompilerVersion >= 21} // Delphi2010+
+    Project.GetAssociatedFiles(FileName, ItemList);
+    {$else}
     ModInfo := Project.FindModuleInfo(FileName);
-    if (ModInfo <> nil) then
-    begin
-      GetModuleFiles(ItemList, ModInfo.OpenModule);
 
-      for I := 0 to ItemList.Count - 1 do
-      begin
-        Result := Result + ItemList[I];
-        if (I < ItemList.Count - 1) then
-          Result := Result + '*';
-      end;
+    if (ModInfo <> nil) then
+      GetModuleFiles(ItemList, ModInfo.OpenModule);
+    {$ifend}
+
+    for I := 0 to ItemList.Count - 1 do
+    begin
+      Result := Result + ItemList[I];
+      if (I < ItemList.Count - 1) then
+        Result := Result + '*';
     end;
   finally
     ItemList.Free;
