@@ -69,7 +69,10 @@ begin
 
     // If the path is the project' (sub-)directory than it's already in the list!
     if (StartsStr(ExtractFilePath(_Project.FileName), ToAdd)) then
+    begin
+      MessageDlg(GetString(38), mtWarning, [mbOk], 0);
       Exit;
+    end;
 
     // Make the path a relative one, so the structure within the SVN stays intact
     ToAddRel := ExtractRelativePath(ExtractFilePath(_Project.FileName), ToAdd);
