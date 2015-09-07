@@ -18,7 +18,8 @@ unit UHelperFunctions;
 interface
 
 uses
-  ToolsAPI, Classes
+  ToolsAPI
+, Classes
 ;
 
 function GetCurrentProject: IOTAProject;
@@ -36,7 +37,10 @@ procedure SetDirectoriesToTSVN(Project: IOTAProject; Directories: TStrings);
 implementation
 
 uses
-  SysUtils, Windows, IniFiles
+  SysUtils
+, Windows
+, IniFiles
+, IOUtils
 ;
 
 function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
@@ -45,6 +49,8 @@ var
   IniFile: TIniFile;
   IniPath: TStringList;
   I: Integer;
+  RelPath, AbsPath: string;
+  OldDir: string;
 begin
   {
     Check for project-specific settings in a <ProjectName>.tsvn file.
@@ -71,10 +77,30 @@ begin
           IniFile.ReadSectionValues('AdditionalDirs', IniPath);
           for I := 0 to IniPath.Count - 1 do
           begin
-            if (DirectoryExists(IniPath.ValueFromIndex[I])) then
+            {
+              Could be a relative path so check that first and get the full name.
+              Otherwise DirectoryExists() will fail for a relative path.
+            }
+            RelPath := IniPath.ValueFromIndex[I];
+            AbsPath := RelPath;
+            if (TPath.IsRelativePath(RelPath)) then
             begin
-              Result.Add(IniPath.ValueFromIndex[I]);
+              {
+                Change the current working directory, because GetFullPath()
+                uses this to get the full path.
+                Change it back after the conversion to not break stuff.
+              }
+              OldDir := GetCurrentDir;
+              try
+                SetCurrentDir(ProjPath);
+                AbsPath := TPath.GetFullPath(RelPath);
+              finally
+                SetCurrentDir(OldDir);
+              end;
             end;
+
+            if (DirectoryExists(AbsPath)) then
+              Result.Add(RelPath);
           end;
         finally
           IniPath.Free;
@@ -84,7 +110,10 @@ begin
       end;
     end;
   except
-
+    on E:Exception do
+    begin
+      // ShowMessage(E.ClassName + ': ' + E.Message);
+    end;
   end;
 end;
 
@@ -158,7 +187,7 @@ begin
   end;
 end;
 
-procedure GetModuleFiles(FileList: TStrings; Module: IOTAModule);
+procedure GetModuleFiles( FileList: TStrings; Module: IOTAModule);
 var
   FileEditor: IOTAEditor;
   I: integer;
@@ -230,12 +259,12 @@ begin
       GetModuleFiles(ItemList, ModInfo.OpenModule);
     {$ifend}
 
-    for I := 0 to ItemList.Count - 1 do
-    begin
-      Result := Result + ItemList[I];
-      if (I < ItemList.Count - 1) then
-        Result := Result + '*';
-    end;
+      for I := 0 to ItemList.Count - 1 do
+      begin
+        Result := Result + ItemList[I];
+        if (I < ItemList.Count - 1) then
+          Result := Result + '*';
+      end;
   finally
     ItemList.Free;
   end;
