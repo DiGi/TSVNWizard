@@ -56,6 +56,7 @@ const
 
 var
   TSVNPath: string;
+  SVNExe: string;
   TMergePath: string;
   Bitmaps: array[0..SVN_VERB_COUNT-1] of TBitmap;
   Actions: array[0..SVN_VERB_COUNT-1] of TAction;
@@ -618,37 +619,50 @@ constructor TTortoiseSVN.Create;
 var
   Reg: TRegistry;
   I: Integer;
+
 // defines for 64-bit registry access, copied from Windows include file
 // (older IDE versions won't find them otherwise)
 const
   KEY_WOW64_64KEY = $0100;
   KEY_WOW64_32KEY = $0200;
+
+  procedure SetValues(const AReg: TRegistry);
+  var
+    Directory: string;
+  begin
+    TSVNPath   := Reg.ReadString( 'ProcPath' );
+    TMergePath := Reg.ReadString( 'TMergePath' );
+
+    // Check if the user has the svn.exe command line tool installed
+    Directory  := Reg.ReadString( 'Directory' );
+    SVNExe := IncludeTrailingPathDelimiter(Directory) + 'bin' + PathDelim + 'svn.exe';
+    if (not FileExists(SVNExe)) then
+      SVNExe := '';
+  end;
 begin
   Reg := TRegistry.Create;
   try
     Reg.RootKey := HKEY_LOCAL_MACHINE;
     if Reg.OpenKeyReadOnly( '\SOFTWARE\TortoiseSVN' ) then
     begin
-      TSVNPath   := Reg.ReadString( 'ProcPath' );
-      TMergePath := Reg.ReadString( 'TMergePath' );
+      SetValues(Reg);
     end
     else
     begin
-      //try 64 bit registry
+      // try 64 bit registry
       Reg.Access := Reg.Access or KEY_WOW64_64KEY;
       if Reg.OpenKeyReadOnly( '\SOFTWARE\TortoiseSVN' ) then
       begin
-        TSVNPath   := Reg.ReadString( 'ProcPath' );
-        TMergePath := Reg.ReadString( 'TMergePath' );
+        SetValues(Reg);
       end
-      else begin
-          //try WOW64 bit registry
-          Reg.Access := Reg.Access or KEY_WOW64_32KEY;
-          if Reg.OpenKeyReadOnly( '\SOFTWARE\TortoiseSVN' ) then
-          begin
-            TSVNPath   := Reg.ReadString( 'ProcPath' );
-            TMergePath := Reg.ReadString( 'TMergePath' );
-          end;
+      else
+      begin
+        // try WOW64 bit registry
+        Reg.Access := Reg.Access or KEY_WOW64_32KEY;
+        if Reg.OpenKeyReadOnly( '\SOFTWARE\TortoiseSVN' ) then
+        begin
+          SetValues(Reg);
+        end;
       end;
     end;
   finally
@@ -1193,6 +1207,10 @@ var
   SourceEditor: IOTASourceEditor;
   Line: Integer;
   FmProjectSettings: TFmProjectSettings;
+  EndRev: Integer;
+  Major, Minor, Build: Integer;
+  RevStr: string;
+  About: string;
 begin
   Project := GetCurrentProject();
 
@@ -1328,10 +1346,35 @@ begin
       end;
     SVN_BLAME:
       begin
+        EndRev := -1;
+
+        {
+          Try to get the current local revision.
+          Starting TortoiseSVN 1.9 it's not possible anymore to pass -1 as the
+          endrev-parameter.
+          Could be a bug in TortoiseSVN but just to be sure try to use svn info
+          and pass the current local revision.
+        }
+        if (SVNExe <> '') then
+          EndRev := GetCurrentRevision(SVNExe, CmdFiles);
+
+        GetFileVersion(TSVNPath, Major, Minor, Build);
+
+        RevStr := '/startrev:1 /endrev:' + IntToStr(EndRev);
+        if (Major = 1) and (Minor >= 9) then
+        begin
+          // TortoiseSVN 1.9.x installed, and svn.exe NOT installed
+          if (EndRev = -1) then
+          begin
+            // Can't pass endrev:-1, so don't pass any parameter -> dialog is shown
+            RevStr := '';
+          end;
+        end;
+
         {
           The call is from the Popup and a file is selected
         }
-        Cmd := '/command:blame /notempfile /startrev:1 /endrev:-1 /path:' + AnsiQuotedStr(CmdFiles, '"');
+        Cmd := '/command:blame /notempfile ' + RevStr + ' /path:' + AnsiQuotedStr(CmdFiles, '"');
 
         Line := -1;
 
@@ -1455,7 +1498,20 @@ begin
     SVN_ABOUT:
         TSVNExec( '/command:about' );
     SVN_ABOUT_PLUGIN:
-      ShowMessage(Format(GetString(30), [VERSION]));
+    begin
+      GetFileVersion(TSVNPath, Major, Minor, Build);
+
+      About := Format(GetString(30), [VERSION]);
+
+      if (Major > 0) then
+      begin
+        About := About +
+                 #10 +
+                 Format('TortoiseSVN: %d.%d.%d', [Major, Minor, Build]);
+      end;
+
+      MessageDlg(About, mtInformation, [mbClose], 0);
+    end;
     SVN_EDIT_CONFLICT,
     SVN_CONFLICT_OK:
         // these verbs are handled by their menu item
