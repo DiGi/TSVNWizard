@@ -30,6 +30,10 @@ function GetFilesForCmd(Project: IOTAProject; FileName: string): string;
 
 function GetString(const Index: Integer) : string;
 
+procedure GetFileVersion(const AFileName: string; out AMajor, AMinor, ABuild: Integer);
+
+function GetCurrentRevision(const ASVNExe, AFile: string): Integer;
+
 function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
 
 procedure SetDirectoriesToTSVN(Project: IOTAProject; Directories: TStrings);
@@ -41,6 +45,7 @@ uses
 , Windows
 , IniFiles
 , IOUtils
+, StrUtils
 ;
 
 function GetDirectoriesFromTSVN(Project: IOTAProject): TStrings;
@@ -162,16 +167,16 @@ var
   Module: IOTAModule;
   Project: IOTAProject;
   ProjectGroup: IOTAProjectGroup;
-  i: Integer;
+  I: Integer;
 begin
   Result := nil;
 
   ModServices := BorlandIDEServices as IOTAModuleServices;
   if ModServices <> nil then
   begin
-    for i := 0 to ModServices.ModuleCount - 1 do
+    for I := 0 to ModServices.ModuleCount - 1 do
     begin
-      Module := ModServices.Modules[i];
+      Module := ModServices.Modules[I];
 
       if Supports(Module, IOTAProjectGroup, ProjectGroup) then
       begin
@@ -194,10 +199,10 @@ var
 begin
   if (Module <> nil) then
   begin
-    for i:= 0 to Module.GetModuleFileCount-1 do
+    for I:= 0 to Module.GetModuleFileCount-1 do
     begin
       try
-        FileEditor:= Module.GetModuleFileEditor(i);
+        FileEditor:= Module.GetModuleFileEditor(I);
         if FileEditor <> nil then
         begin
           FileList.Add( FileEditor.GetFileName );
@@ -207,7 +212,7 @@ begin
         // have an associated form, calling GetModuleFileEditor(1) throws
         // access violation; calling GetModuleFileEditor(2) gets the .H file
         // (GetModuleFileCount returns 2, though)
-        if (i = 1) and (Module.GetModuleFileCount = 2) then
+        if (I = 1) and (Module.GetModuleFileCount = 2) then
         try
             FileEditor:= Module.GetModuleFileEditor(2);
             if FileEditor <> nil then
@@ -231,6 +236,183 @@ begin
                    SizeOf(Buffer));
   if (ls <> 0) then
     Result := Buffer;
+end;
+
+procedure GetFileVersion(const AFileName: string; out AMajor, AMinor, ABuild: Integer);
+var
+  VerInfoSize: DWORD;
+  VerInfo: Pointer;
+  VerValueSize: DWORD;
+  VerValue: PVSFixedFileInfo;
+  Dummy: DWORD;
+begin
+  try
+    VerInfoSize := GetFileVersionInfoSize(PChar(AFileName), Dummy);
+    try
+      GetMem(VerInfo, VerInfoSize);
+      GetFileVersionInfo(PChar(AFileName), 0, VerInfoSize, VerInfo);
+      VerQueryValue(VerInfo, '\', Pointer(VerValue), VerValueSize);
+      with VerValue^ do
+      begin
+        AMajor := dwFileVersionMS shr 16;
+        AMinor := dwFileVersionMS and $FFFF;
+        ABuild := dwFileVersionLS shr 16;
+      end;
+    finally
+      FreeMem(VerInfo, VerInfoSize);
+    end;
+  except
+    AMajor := -1;
+    AMinor := -1;
+    ABuild := -1;
+  end;
+end;
+
+function GetCurrentRevision(const ASVNExe, AFile: string): Integer;
+const
+  MaxBufSize = 1024;
+type
+  TCharBuffer = array[0..MaxInt - 1] of AnsiChar;
+var
+  pBuf: ^TCharBuffer;
+  BufSize: Cardinal;
+  si: STARTUPINFO;
+  sa: PSecurityAttributes;
+  sd: PSECURITY_DESCRIPTOR;
+  pi: PROCESS_INFORMATION;
+  ReadSTDOut, WriteSTDOut: THandle;
+  ExitCode: LongWord;
+  ByteRead: LongWord;
+  ByteAvail: LongWord;
+  Str, Last: AnsiString;
+  I: Integer;
+  EndCR: Boolean;
+begin
+  Result := -1;
+
+  if (Trim(ASVNExe) = '') then
+    Exit;
+
+  if (Trim(AFile) = '') then
+    Exit;
+
+  GetMem(sa, sizeof(SECURITY_ATTRIBUTES));
+  if (Win32Platform = VER_PLATFORM_WIN32_NT) then
+  begin
+    GetMem(sd, sizeof(SECURITY_DESCRIPTOR));
+    InitializeSecurityDescriptor(sd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(sd, True, nil, False);
+    sa.lpSecurityDescriptor := sd;
+  end else
+  begin
+    sa.lpSecurityDescriptor := nil;
+    sd := nil;
+  end;
+  sa.nLength := sizeof(SECURITY_ATTRIBUTES);
+  sa.bInheritHandle := True;
+  BufSize := MaxBufSize;
+  pBuf := AllocMem(BufSize);
+
+  if not (CreatePipe(ReadSTDOut, WriteSTDOut, sa, 0)) then //create stdout pipe
+  begin
+    raise Exception.Create('Error creating pipe!');
+  end;
+
+  GetStartupInfo(si);
+  si.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+  si.wShowWindow := SW_HIDE;
+  si.hStdOutput := WriteSTDOut;
+//  si.hStdError := WriteSTDOut;
+
+  if not (CreateProcess(nil,
+                        // svn.exe info <file>
+                        PChar(ASVNExe + ' info ' + AFile),
+                        nil,
+                        nil,
+                        TRUE,
+                        CREATE_NEW_CONSOLE,
+                        nil,
+                        nil,
+                        si,
+                        pi)) then
+  begin
+    raise Exception.Create('');
+  end;
+
+  ExitCode := STILL_ACTIVE;
+  try
+    repeat
+      GetExitCodeProcess(pi.hProcess, ExitCode);
+      PeekNamedPipe(ReadSTDOut, pBuf, BufSize, @ByteRead, @ByteAvail, nil);
+
+        if (ByteRead <> 0) then
+      begin
+        if (BufSize < ByteAvail) then
+        begin
+          BufSize := ByteAvail;
+          ReallocMem(pBuf, BufSize);
+        end;
+
+        FillChar(pBuf^, BufSize, #0); //empty the buffer
+        ReadFile(ReadSTDOut, pBuf^, BufSize, ByteRead, nil); //read the stdout pipe
+        Str := Last; //take the begin of the line (if exists)
+        I := 0;
+        while (I < ByteRead) do
+        begin
+          case pBuf^[I] of
+            #0: Inc(I);
+            #10, #13:
+              begin
+                Inc(I);
+                if not (EndCR and (pBuf^[I - 1] = #10)) then
+                begin
+                  if (I < ByteRead) and (pBuf^[I - 1] = #13) and (pBuf^[I] = #10) then
+                  begin
+                    // CRLF
+                    Inc(I);
+                  end
+                  else
+                  begin
+                    // LF
+                  end;
+
+                  if (StartsText('Last Changed Rev', Str)) then
+                  begin
+                    // Last Changed Rev: 67452
+                    Result := StrToIntDef(Copy(Str, 19, MaxInt), -1);
+                  end;
+
+                  Str := '';
+                end;
+              end;
+          else
+            begin
+              Str := Str + pBuf^[I]; // add a character
+              Inc(I);
+            end;
+          end;
+        end;
+        EndCR := (pBuf^[I - 1] = #13);
+        Last := Str; // no CRLF found in the rest, maybe in the next output
+      end;
+
+      if ExitCode <> STILL_ACTIVE then
+        Break;
+    until (ExitCode <> STILL_ACTIVE);
+  finally
+    if (ExitCode = STILL_ACTIVE) then
+      TerminateProcess(pi.hProcess, 0);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    CloseHandle(ReadSTDOut);
+    CloseHandle(WriteSTDOut);
+
+    FreeMem(pBuf);
+    if (Win32Platform = VER_PLATFORM_WIN32_NT) then
+      FreeMem(sd);
+    FreeMem(sa);
+  end;
 end;
 
 
