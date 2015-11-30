@@ -1211,6 +1211,7 @@ var
   Major, Minor, Build: Integer;
   RevStr: string;
   About: string;
+  Files: TStringList;
 begin
   Project := GetCurrentProject();
 
@@ -1347,6 +1348,15 @@ begin
     SVN_BLAME:
       begin
         EndRev := -1;
+
+        // Only get the first file, ignore additional files (like *.dfm)
+        Files := TStringList.Create;
+        try
+          GetFiles(Files);
+          CmdFiles := Files[0];
+        finally
+          Files.Free;
+        end;
 
         {
           Try to get the current local revision.
